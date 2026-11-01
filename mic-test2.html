@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="录音自检2">
+<meta name="theme-color" content="#12203a">
+<title>小熊录音自检 2</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;padding:16px 14px 40px;font:16px/1.55 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0f1726;color:#eaf2ff}
+h1{font-size:19px;margin:0 0 6px}
+p.sub{margin:0 0 14px;color:#93a9c9;font-size:13px}
+button{display:block;width:100%;margin:0 0 10px;padding:15px;font:600 16px/1.25 inherit;color:#08131f;background:#6fd3ff;border:0;border-radius:12px}
+button.b{background:#ffd166}
+button.c{background:#4a5f80;color:#dbe8ff}
+button.copy{background:#3ddc84}
+button:disabled{opacity:.45}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;font:13px/1.55 ui-monospace,Menlo,monospace;color:#b8ffd9}
+.card{background:#17233a;border:1px solid #24344f;border-radius:14px;padding:12px 13px;margin:0 0 12px}
+#sumCard{display:none;background:#12304a;border:2px solid #3ddc84}
+#sum{font:700 19px/1.7 -apple-system,"PingFang SC",sans-serif;letter-spacing:.2px}
+#sum .bad{color:#ff9b9b}
+#sum .good{color:#7dffb0}
+#sum .line{margin:2px 0}
+#meter{height:12px;background:#0b1220;border-radius:7px;overflow:hidden;margin:0 0 10px}
+#meterIn{height:100%;width:0%;background:linear-gradient(90deg,#3ddc84,#ffd166,#ff6b6b);transition:width .06s}
+</style>
+</head>
+<body>
+<h1>小熊录音自检 2</h1>
+<p class="sub">做完 ① 和 ②（各说一句"今天天气很好"）后，最上面会出现一张<b>大字结论卡</b>——直接拍照发我就可以。</p>
+
+<div class="card" id="sumCard">
+  <div id="sum"></div>
+</div>
+
+<div class="card">
+  <div id="meter"><div id="meterIn"></div></div>
+  <button id="bA">① A：先建音频上下文，再开麦（v5 的做法）</button>
+  <button id="bB" class="b">② B：开麦之后，按麦克风采样率重建上下文（v6 的做法）</button>
+  <button id="bC" class="c">③ C：MediaRecorder / AAC 对照（已知坏，可跳过）</button>
+  <button id="bCopy" class="copy">📋 复制全部结果</button>
+</div>
+
+<div class="card"><pre id="out">准备中…</pre></div>
+
+<script>
+(function(){
+'use strict';
+var AC=window.AudioContext||window.webkitAudioContext;
+var out=document.getElementById('out'), meterIn=document.getElementById('meterIn');
+var lines=[], busy=false;
+function log(t){ lines.push(t); out.textContent=lines.join('\n'); }
+function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms) }) }
+function now(){ var d=new Date(); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2) }
+function head(){ lines.push('========== '+now()+' 本轮结果 =========='); out.textContent=lines.join('\n') }
+
+/* 页面一打开就建一个上下文（相当于 v4/v5：开麦之前就有上下文了） */
+var base=null;
+function getBase(){ if(!base){ try{ base=new AC() }catch(e){ base=new AC() } } return base }
+
+async function gUM(){
+  var tries=[{audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}},{audio:true}], last=null;
+  for(var i=0;i<tries.length;i++){
+    try{ return await navigator.mediaDevices.getUserMedia(tries[i]) }catch(e){ last=e }
+  }
+  throw last||new Error('getUserMedia 失败');
+}
+function mkCtx(rate){
+  var c=null;
+  if(rate){ try{ c=new AC({sampleRate:rate}) }catch(e){ c=null } }
+  if(!c){ try{ c=new AC() }catch(e){ try{ c=new AC() }catch(e2){ return null } } }
+  return c;
+}
+
+function speechness(d,sr){
+  var n=d.length; if(n<sr*.15) return 0;
+  var win=Math.min(4096,n), hop=Math.max(1,win>>1), ws=[], s, i;
+  for(s=0;s+win<=n;s+=hop){ var e=0; for(i=0;i<win;i++) e+=d[s+i]*d[s+i]; ws.push({s:s,e:e/win}) }
+  if(!ws.length) return 0;
+  ws.sort(function(p,q){return q.e-p.e});
+  var lo=Math.max(2,Math.round(sr/400)), hi=Math.min(win>>1,Math.round(sr/60)), top=0;
+  for(var w=0;w<Math.min(3,ws.length);w++){
+    var at=ws[w].s;
+    for(var lag=lo;lag<=hi;lag++){
+      var x=0,y=0,z=0;
+      for(i=0;i<win-lag;i++){ var a=d[at+i], b=d[at+i+lag]; x+=a*b; y+=a*a; z+=b*b }
+      var r=(y>0&&z>0)?x/Math.sqrt(y*z):0;
+      if(r>top) top=r;
+    }
+    if(top>.6) break;
+  }
+  return Math.max(0,Math.min(1,top));
+}
+
+/* 采一段 4 秒的原始 PCM，然后同一个上下文里播回来 */
+async function capture(ctx,stream,ms){
+  var src=ctx.createMediaStreamSource(stream);
+  var proc=ctx.createScriptProcessor(4096,1,1);
+  var zero=ctx.createGain(); zero.gain.value=0;
+  src.connect(proc); proc.connect(zero); zero.connect(ctx.destination);
+  var chunks=[];
+  proc.onaudioprocess=function(e){
+    var d=new Float32Array(e.inputBuffer.getChannelData(0));
+    chunks.push(d);
+    var sq=0; for(var i=0;i<d.length;i++) sq+=d[i]*d[i];
+    meterIn.style.width=Math.min(100,Math.sqrt(sq/d.length)*700)+'%';
+  };
+  await sleep(ms);
+  proc.onaudioprocess=null;
+  try{ proc.disconnect() }catch(e){}
+  try{ src.disconnect() }catch(e){}
+  try{ zero.disconnect() }catch(e){}
+  meterIn.style.width='0%';
+  var total=chunks.reduce(function(n,a){return n+a.length},0);
+  var all=new Float32Array(total), o=0;
+  chunks.forEach(function(a){ all.set(a,o); o+=a.length });
+  return all;
+}
+
+function stats(d,sr){
+  var sq=0,pk=0,nz=0;
+  for(var i=0;i<d.length;i++){ var v=d[i]; sq+=v*v; if(Math.abs(v)>pk)pk=Math.abs(v); if(Math.abs(v)>1e-5) nz++ }
+  var rms=Math.sqrt(sq/Math.max(1,d.length));
+  return {sec:(d.length/sr).toFixed(2), rms:rms, peak:pk, voice:Math.round(speechness(d,sr)*100), active:Math.round(nz/Math.max(1,d.length)*100)};
+}
+function verdict(st){
+  if(st.voice>=45&&st.rms>0.015) return '✅ 正常人声（听着应该是清楚的一句话）';
+  if(st.voice>=20) return '△ 有点像人声，但可能很脏/很闷，需要听一下';
+  if(st.rms<0.004) return '❌ 基本是静音——麦克风没把声音送进来';
+  return '❌ 不像人声（'+(st.peak/Math.max(st.rms,1e-6)>25?'音量很低、中间夹着咔哒声':'一片宽带噪声')+'）';
+}
+function play(ctx,d,sr){
+  try{
+    var b=ctx.createBuffer(1,d.length,sr); b.copyToChannel(d,0);
+    var s=ctx.createBufferSource(); s.buffer=b; s.playbackRate.value=1.3; s.connect(ctx.destination); s.start();
+  }catch(e){ log('   （回放失败：'+(e&&e.message||e)+'）') }
+}
+
+async function runTest(tag){
+  if(busy) return; busy=true;
+  var btns=[document.getElementById('bA'),document.getElementById('bB'),document.getElementById('bC')];
+  btns.forEach(function(b){ b.disabled=true });
+  head();
+  var stream=null, ctx=null, tip='';
+  try{
+    if(tag==='A'){
+      ctx=getBase();
+      try{ await ctx.resume() }catch(e){}
+      stream=await gUM();
+      tip='A：上下文是开麦之前建的';
+    }else{
+      stream=await gUM();
+      var rate=0; try{ rate=stream.getAudioTracks()[0].getSettings().sampleRate||0 }catch(e){}
+      ctx=mkCtx(rate);
+      if(!ctx) throw new Error('建不出 AudioContext');
+      for(var t=0;t<4&&ctx.state!=='running';t++){
+        try{ await ctx.resume() }catch(e){}
+        if(ctx.state==='running') break;
+        await sleep(140);
+      }
+      tip='B：上下文是开麦之后按麦速率('+(rate||'?')+'Hz)重建的';
+    }
+    var g={}; try{ g=stream.getAudioTracks()[0].getSettings() }catch(e){}
+    log('【'+tag+'】'+tip);
+    log('  上下文 '+ctx.sampleRate+'Hz（状态 '+ctx.state+'）· 麦克风 '+(g.sampleRate||'?')+'Hz · 采样率'+
+        (g.sampleRate&&Math.abs(g.sampleRate-ctx.sampleRate)>1?'❌不匹配':'✅一致'));
+    log('  echoCancellation='+g.echoCancellation+' noiseSuppression='+g.noiseSuppression+' autoGainControl='+g.autoGainControl);
+    log('  录音中…（现在说"今天天气很好"）');
+    var d=await capture(ctx,stream,4000);
+    var st=stats(d,ctx.sampleRate);
+    log('  结果：时长 '+st.sec+' 秒 · 音量 '+st.rms.toFixed(4)+' · 峰值 '+st.peak.toFixed(3)+
+        ' · 有信号占比 '+st.active+'% · 像人声 '+st.voice+'%');
+    log('  判读：'+verdict(st));
+    RES[tag]={voice:st.voice,rms:st.rms,ctxRate:ctx.sampleRate,micRate:g.sampleRate||0,ok:(st.voice>=20&&st.rms>0.004)};
+    renderSum();
+    log('  正在用同一个上下文播回上一段…');
+    play(ctx,d,ctx.sampleRate);
+    await sleep(1200);
+  }catch(e){
+    log('  ❌ 出错：'+(e&&e.message||e));
+  }finally{
+    try{ if(stream) stream.getTracks().forEach(function(t){t.stop()}) }catch(e){}
+    if(tag==='A'&&base){ try{ base.suspend() }catch(e){} }
+    log('');
+    busy=false;
+    btns.forEach(function(b){ b.disabled=false });
+  }
+}
+
+async function runC(){
+  if(busy) return; busy=true;
+  var btns=[document.getElementById('bA'),document.getElementById('bB'),document.getElementById('bC')];
+  btns.forEach(function(b){ b.disabled=true });
+  head();
+  var stream=null;
+  try{
+    stream=await gUM();
+    var list=['audio/mp4','audio/webm;codecs=opus','audio/webm'], m='';
+    for(var i=0;i<list.length;i++){ if(MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(list[i])){ m=list[i]; break } }
+    log('【C】MediaRecorder 对照（'+m+'）');
+    var chunks=[];
+    var rec=m?new MediaRecorder(stream,{mimeType:m}):new MediaRecorder(stream);
+    rec.ondataavailable=function(e){ if(e.data&&e.data.size) chunks.push(e.data) };
+    rec.start();
+    log('  录音中…（现在说一句话）');
+    await sleep(4000);
+    var blob=await new Promise(function(done){
+      var t=setTimeout(function(){done(null)},4000);
+      rec.onstop=function(){ clearTimeout(t); done(new Blob(chunks,{type:rec.mimeType||m||'audio/mp4'})) };
+      try{ rec.stop() }catch(e){ clearTimeout(t); done(null) }
+    });
+    if(!blob||!blob.size){ log('  ❌ 没有数据'); }
+    else{
+      log('  blob：'+(blob.type||m)+' · '+blob.size+' 字节');
+      var ab=await blob.arrayBuffer();
+      var oc=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(1,1,44100);
+      var buf=await new Promise(function(ok,no){ var p=oc.decodeAudioData(ab,ok,no); if(p&&p.then) p.then(ok,no) });
+      var d=buf.getChannelData(0), st=stats(d,buf.sampleRate);
+      log('  解码后：时长 '+st.sec+' 秒 · 音量 '+st.rms.toFixed(4)+' · 峰值 '+st.peak.toFixed(3)+
+          ' · 有信号占比 '+st.active+'% · 像人声 '+st.voice+'%');
+      log('  判读：'+verdict(st)+(st.peak>0.5&&st.rms<0.01?'（这就是典型的"AAC 解码出来只剩咔哒声"）':''));
+      RES.C={voice:st.voice,rms:st.rms,ctxRate:buf.sampleRate,micRate:0,ok:(st.voice>=20&&st.rms>0.004)};
+      renderSum();
+    }
+  }catch(e){ log('  ❌ 出错：'+(e&&e.message||e)) }
+  finally{
+    try{ if(stream) stream.getTracks().forEach(function(t){t.stop()}) }catch(e){}
+    log(''); busy=false;
+    btns.forEach(function(b){ b.disabled=false });
+  }
+}
+
+var RES={A:null,B:null,C:null};
+function renderSum(){
+  var box=document.getElementById('sum'), card=document.getElementById('sumCard');
+  var rows=[], any=false;
+  function row(tag,label){
+    var r=RES[tag]; if(!r) return;
+    any=true;
+    var rate=r.micRate?((Math.abs(r.micRate-r.ctxRate)>1?'❌ ':'✅ ')+r.ctxRate+'/'+r.micRate+'Hz'):(r.ctxRate+'Hz');
+    var cls=r.ok?'good':'bad';
+    rows.push('<div class="line">'+label+'：<span class="'+cls+'">像人声 '+r.voice+'%</span> · 音量 '+r.rms.toFixed(4)+' · 采样率 '+rate+'</div>');
+  }
+  row('A','A（v5 做法）');
+  row('B','B（v6 做法）');
+  row('C','C（AAC 对照）');
+  if(!any){ card.style.display='none'; return }
+  var tail='';
+  if(RES.A&&RES.B){
+    if(!RES.A.ok&&RES.B.ok) tail='<div class="line">👉 A 坏、B 好：采样率错位成立，v6 方向正确</div>';
+    else if(RES.A.ok&&RES.B.ok) tail='<div class="line">👉 A、B 都好：麦克风没问题，小熊还沙沙就是旧缓存在跑</div>';
+    else if(!RES.A.ok&&!RES.B.ok) tail='<div class="line">👉 A、B 都坏：麦克风在 iOS 里被毁了，继续排查会话冲突</div>';
+    else tail='<div class="line">👉 A 好、B 坏：v6 的重建反而有害，退回 v5 写法</div>';
+  }
+  box.innerHTML=rows.join('')+tail;
+  card.style.display='block';
+}
+function env(){
+  head();
+  log('时间 '+now()+' · '+navigator.userAgent.slice(0,110));
+  log('桌面图标模式：'+((window.matchMedia('(display-mode: standalone)').matches||navigator.standalone)?'是':'否（Safari 标签页）'));
+  try{ log('audioSession：'+(navigator.audioSession?navigator.audioSession.type:'不支持')) }catch(e){}
+  log('MediaRecorder：'+(window.MediaRecorder?'支持 mp4='+MediaRecorder.isTypeSupported('audio/mp4'):'不支持'));
+  try{
+    var sc=navigator.mediaDevices.getSupportedConstraints();
+    log('支持 echoCancellation/NS/AGC：'+[!!sc.echoCancellation,!!sc.noiseSuppression,!!sc.autoGainControl].join('/'));
+  }catch(e){}
+  log('（下面先点 ① 再说一句话，然后点 ② 再说一句话）');
+  log('');
+}
+
+document.getElementById('bA').onclick=function(){ runTest('A') };
+document.getElementById('bB').onclick=function(){ runTest('B') };
+document.getElementById('bC').onclick=function(){ runC() };
+document.getElementById('bCopy').onclick=async function(){
+  var text=lines.join('\n');
+  try{ await navigator.clipboard.writeText(text); this.textContent='✅ 已复制，去粘贴发给我' }
+  catch(e){
+    try{
+      var ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+      this.textContent='✅ 已复制，去粘贴发给我';
+    }catch(e2){ this.textContent='复制失败：请长按上面的文字手动全选复制' }
+  }
+  var self=this; setTimeout(function(){ self.textContent='📋 复制全部结果' },4000);
+};
+env();
+})();
+</script>
+</body>
+</html>

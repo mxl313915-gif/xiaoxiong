@@ -1306,11 +1306,11 @@ button{font-family:inherit}
   setInterval(function(){ if(Math.random()<.4) spawnBird() },16000);
 
   /* ---------- listen and repeat ---------- */
-  var VER='v3', DEBUG=/[?&]debug/.test(location.search);      // open the page with ?debug to see what the microphone is doing
+  var VER='v4', DEBUG=/[?&]debug/.test(location.search);      // open the page with ?debug to see what the microphone is doing
   function dbg(t){ if(DEBUG) showNote(t,12000) }
   function holdSet(ms){ holdUntil=performance.now()+ms }
   var stream=null, src=null, proc=null, zero=null;
-  var speaking=false, ring=[], rec=[], recLen=0, silentN=0, noise=.004, calibN=0, calibMin=1, tStart=0;
+  var speaking=false, ring=[], rec=[], recLen=0, silentN=0, noise=.004, calibN=0, calibMin=1, tStart=0, hotN=0;
   function resetRec(){speaking=false; ring=[]; rec=[]; recLen=0; silentN=0}
 
   /* Second, independent recording of the same microphone with the browser's own encoder (MediaRecorder).
@@ -1361,15 +1361,32 @@ button{font-family:inherit}
     if(buf.numberOfChannels>1){ var d2=buf.getChannelData(1), mix=new Float32Array(n); for(var i=0;i<n;i++) mix[i]=(d[i]+d2[i])/2; d=mix }
     var a=Math.max(0,Math.floor((tFrom/1000-.7)*sr)), b=Math.min(n,Math.ceil((tTo/1000+.7)*sr));
     if(b-a<sr*.2){ a=0; b=n }
-    var fl=Math.round(sr*.02), nf=Math.floor((b-a)/fl), fr=new Float32Array(nf), mx=0;
-    for(var f=0;f<nf;f++){ var sm=0; for(var j=0;j<fl;j++){ var v=d[a+f*fl+j]; sm+=v*v } fr[f]=Math.sqrt(sm/fl); if(fr[f]>mx) mx=fr[f] }
-    if(mx<.006) return null;
-    var lim=mx*.18, f0=0, f1=nf-1;
-    while(f0<nf&&fr[f0]<lim) f0++;
-    while(f1>f0&&fr[f1]<lim) f1--;
-    var s0=Math.max(0,a+(f0-4)*fl), s1=Math.min(n,a+(f1+8)*fl);
-    if(s1-s0<sr*.2) return null;
-    return {data:d.slice(s0,s1),sr:sr};
+    return voiceFrom(d.subarray(a,b),sr);
+  }
+  /* find the real spoken part: ignore short loud clicks/pops (they would otherwise decide the volume), keep the longest steady stretch */
+  function voiceFrom(d,sr){
+    var fl=Math.round(sr*.02), nf=Math.floor(d.length/fl), fr=new Float32Array(nf), f, j;
+    if(nf<10) return null;
+    for(f=0;f<nf;f++){ var sm=0; for(j=0;j<fl;j++){ var v=d[f*fl+j]; sm+=v*v } fr[f]=Math.sqrt(sm/fl) }
+    var so=Array.prototype.slice.call(fr).sort(function(x,y){return x-y});
+    var floor=so[Math.floor(nf*.2)], top=so[Math.floor(nf*.85)];
+    if(top<.004) return null;
+    var thr=Math.max(floor*3,top*.3), pop=top*6, voiced=[];
+    for(f=0;f<nf;f++) voiced[f]=fr[f]>thr&&fr[f]<=pop;
+    var best=null, f0=-1, last=-1, cnt=0, sum=0;
+    function close(){ if(f0>=0&&cnt>=6&&(!best||sum>best.sum)) best={a:f0,b:last,sum:sum} }
+    for(f=0;f<nf;f++){
+      if(voiced[f]){
+        if(f0>=0&&f-last>12){ close(); f0=-1 }
+        if(f0<0){ f0=f; cnt=0; sum=0 }
+        last=f; cnt++; sum+=fr[f];
+      }
+    }
+    close();
+    if(!best) return null;
+    var s0=Math.max(0,(best.a-3)*fl), s1=Math.min(d.length,(best.b+8)*fl), out=d.slice(s0,s1);
+    for(f=0;f<Math.floor(out.length/fl);f++){ if(fr[Math.floor(s0/fl)+f]>pop){ for(j=0;j<fl;j++) out[f*fl+j]=0 } }
+    return {data:out,sr:sr,level:top};
   }
 
   function uiListening(on){
@@ -1420,10 +1437,11 @@ button{font-family:inherit}
     var th=Math.max(.02,noise*3.5), copy=new Float32Array(input);
     if(!speaking){
       if(rms<th) noise=Math.min(.04,noise*.95+rms*.05);
-      ring.push(copy); if(ring.length>4) ring.shift();
+      ring.push(copy); if(ring.length>6) ring.shift();
       if(mr&&performance.now()-mrT0>25000) mrBegin();       // do not let a long silence pile up in memory
-      if(rms>th){
-        speaking=true; tStart=performance.now()-ring.length*len/sr*1000; rec=ring.slice(); ring=[]; silentN=0; recLen=rec.length*len;
+      if(rms>th) hotN++; else hotN=0;
+      if(hotN>=2){
+        hotN=0; speaking=true; tStart=performance.now()-ring.length*len/sr*1000; rec=ring.slice(); ring=[]; silentN=0; recLen=rec.length*len;
         bear.classList.add('hearing'); say('嗯嗯？',1500);
       }
     }else{
@@ -1455,8 +1473,12 @@ button{font-family:inherit}
         return clip;
       });
     }).then(function(clip){ return clip },
-            function(err){ dbg('改用备用录音：'+String(err&&err.message||err)+'（'+sr+'Hz，'+(out.length/sr).toFixed(1)+' 秒）'); return {data:out,sr:sr} })
+            function(err){
+              var c2=voiceFrom(out,sr)||(level>Math.max(.012,noise*3)?{data:out,sr:sr}:null);
+              dbg('改用备用录音：'+String(err&&err.message||err)+'（'+sr+'Hz，'+(out.length/sr).toFixed(1)+' 秒）'+(c2?'':'，也没找到人声'));
+              return c2 })
     .then(function(clip){
+      if(!clip){ holdSet(0); bear.classList.remove('hearing'); bubble.textContent='没听清，再说一次'; if(listening&&stream) mrBegin(); return }
       stopListen();                                          // close the microphone first: iPhone plays quietly / hissy while it is open
       setTimeout(function(){ playBack(clip.data,clip.sr) },250);
     });
@@ -1479,14 +1501,15 @@ button{font-family:inherit}
     }catch(e){}
   }
   function playBack(samples,sr){
-    var peak=0.001, i;
-    for(i=0;i<samples.length;i++){var a=Math.abs(samples[i]); if(a>peak) peak=a}
-    var g=Math.min(6,.9/peak), fade=Math.round(sr*.01);
+    var i, ab=[]; for(i=0;i<samples.length;i+=3) ab.push(Math.abs(samples[i]));
+    ab.sort(function(x,y){return x-y});
+    var peak=Math.max(.002,ab[Math.floor(ab.length*.985)]||.002);
+    var g=Math.min(10,.55/peak), fade=Math.round(sr*.01);
     for(i=0;i<samples.length;i++){
       var e2=Math.min(1,i/fade,(samples.length-1-i)/fade);
-      samples[i]=Math.max(-1,Math.min(1,samples[i]*g*e2));
+      samples[i]=Math.max(-.95,Math.min(.95,samples[i]*g*e2));
     }
-    dbg('播放：原音量峰值 '+peak.toFixed(3)+'，放大 '+g.toFixed(1)+' 倍，'+sr+'Hz');
+    dbg('播放：主要音量 '+peak.toFixed(3)+'，放大 '+g.toFixed(1)+' 倍，'+sr+'Hz');
     var rate=1.5, dur=samples.length/sr/rate*1000;
     bear.classList.add('talk'); bubble.textContent='学给你听！';
     holdSet(dur+800);

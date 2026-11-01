@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="录音自检">
+<meta name="theme-color" content="#12203a">
+<title>小熊录音自检</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;padding:18px 16px 40px;font:16px/1.55 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#0f1726;color:#eaf2ff}
+h1{font-size:19px;margin:0 0 4px}
+p.sub{margin:0 0 16px;color:#8fa6c8;font-size:13px}
+.card{background:#17233a;border:1px solid #24344f;border-radius:14px;padding:12px 14px;margin:0 0 12px}
+button{display:block;width:100%;margin:0 0 10px;padding:14px;font:600 16px/1.2 inherit;color:#08131f;background:#6fd3ff;border:0;border-radius:12px}
+button.b{background:#ffd166}
+button.ghost{background:#2d3f5e;color:#dbe8ff}
+button:disabled{opacity:.45}
+#meter{height:14px;background:#0b1220;border-radius:8px;overflow:hidden;margin:6px 0 2px}
+#meterIn{height:100%;width:0%;background:linear-gradient(90deg,#3ddc84,#ffd166,#ff6b6b);transition:width .06s}
+canvas{width:100%;height:70px;background:#0b1220;border-radius:10px;display:block}
+pre{margin:0;white-space:pre-wrap;word-break:break-all;font:12px/1.5 ui-monospace,Menlo,monospace;color:#a8ffd8}
+.k{color:#8fa6c8}
+</style>
+</head>
+<body>
+<h1>小熊录音自检</h1>
+<p class="sub">同一个网址里测两条录音管线，看是哪一条在 iPhone 上变成了“沙沙沙”。先说一句话，停一下，让它自己录完 4 秒。</p>
+
+<div class="card">
+  <div id="meter"><div id="meterIn"></div></div>
+  <canvas id="wave" width="320" height="70"></canvas>
+  <div style="margin-top:8px"><button id="btnA">① 用 PCM 录 4 秒（v5 小熊走的就是这条路）</button>
+  <button id="btnB" class="b">② 用 MediaRecorder(mp4/AAC) 录 4 秒（v4 走的路）</button>
+  <button id="btnPlayA" class="ghost" disabled>③ 播放 A 的录音</button>
+  <button id="btnPlayB" class="ghost" disabled>④ 播放 B 的录音</button>
+  <button id="btnPlayRaw" class="ghost" disabled>⑤ 用 &lt;audio&gt; 直接播 B（不解码）</button></div>
+</div>
+
+<div class="card"><pre id="out">准备中…</pre></div>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var out=$('#out'), wave=$('#wave'), wctx=wave.getContext('2d'), meterIn=$('#meterIn');
+var lines=[];
+function log(t){ lines.push(t); out.textContent=lines.join('\n'); }
+function clearLog(){ lines=[]; out.textContent='' }
+function ios(){ return /iP(hone|ad|od)/.test(navigator.platform||'')||(/Mac/.test(navigator.userAgent)&&'ontouchend' in document) }
+
+var AC=window.AudioContext||window.webkitAudioContext;
+var ctx=null, stream=null, src=null, proc=null, zero=null;
+var bufA=null, srA=0, blobB=null, decB=null, decBSr=0;
+
+function ctxReady(){
+  if(!ctx) ctx=new AC();
+  if(ctx.state!=='running'){ try{ ctx.resume() }catch(e){} }
+  return ctx;
+}
+
+async function openMic(){
+  if(stream) return stream;
+  var tries=[{audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}},{audio:true}],
+      last=null;
+  for(var i=0;i<tries.length;i++){
+    try{ stream=await navigator.mediaDevices.getUserMedia(tries[i]); break }catch(e){ last=e }
+  }
+  if(!stream) throw last||new Error('getUserMedia 失败');
+  return stream;
+}
+
+function tapMic(onChunk){
+  var c=ctxReady();
+  if(proc){ proc.onaudioprocess=null; try{proc.disconnect()}catch(e){} proc=null }
+  if(src){ try{src.disconnect()}catch(e){} src=null }
+  if(zero){ try{zero.disconnect()}catch(e){} zero=null }
+  src=c.createMediaStreamSource(stream);
+  proc=c.createScriptProcessor(4096,1,1);
+  zero=c.createGain(); zero.gain.value=0;
+  src.connect(proc); proc.connect(zero); zero.connect(c.destination);
+  proc.onaudioprocess=onChunk;
+}
+function micOff(){
+  if(proc){ proc.onaudioprocess=null; try{proc.disconnect()}catch(e){} }
+  if(src){ try{src.disconnect()}catch(e){} }
+  if(zero){ try{zero.disconnect()}catch(e){} }
+  proc=src=zero=null; bufDraw=null;
+  meterIn.style.width='0%';
+}
+var bufDraw=null;
+function draw(){
+  var w=wave.width, h=wave.height;
+  wctx.clearRect(0,0,w,h);
+  wctx.strokeStyle='#3ddc84'; wctx.lineWidth=1.5; wctx.beginPath();
+  for(var x=0;x<w;x++){
+    var v=bufDraw?bufDraw[Math.floor(x/w*bufDraw.length)]||0:0;
+    var y=h/2-v*h/2;
+    if(x===0) wctx.moveTo(x,y); else wctx.lineTo(x,y);
+  }
+  wctx.stroke();
+}
+
+/* 像不像人声：周期信号（人说话）自相关高，噪声低 */
+function speechness(d,sr){
+  var n=d.length; if(n<sr*.15) return 0;
+  var win=Math.min(4096,n), hop=Math.max(1,win>>1), ws=[], s, i;
+  for(s=0;s+win<=n;s+=hop){ var e=0; for(i=0;i<win;i++) e+=d[s+i]*d[s+i]; ws.push({s:s,e:e/win}) }
+  if(!ws.length) return 0;
+  ws.sort(function(p,q){return q.e-p.e});
+  var lo=Math.max(2,Math.round(sr/400)), hi=Math.min(win>>1,Math.round(sr/60)), top=0;
+  for(var w=0;w<Math.min(3,ws.length);w++){
+    var at=ws[w].s;
+    for(var lag=lo;lag<=hi;lag++){
+      var x=0,y=0,z=0;
+      for(i=0;i<win-lag;i++){ var a=d[at+i], b=d[at+i+lag]; x+=a*b; y+=a*a; z+=b*b }
+      var r=(y>0&&z>0)?x/Math.sqrt(y*z):0;
+      if(r>top) top=r;
+    }
+    if(top>.6) break;
+  }
+  return Math.max(0,Math.min(1,top));
+}
+function stats(d,sr){
+  var sq=0,pk=0; for(var i=0;i<d.length;i++){ sq+=d[i]*d[i]; pk=Math.max(pk,Math.abs(d[i])) }
+  var rms=Math.sqrt(sq/Math.max(1,d.length));
+  return {sec:(d.length/sr).toFixed(2), rms:rms.toFixed(4), peak:pk.toFixed(3), voice:Math.round(speechness(d,sr)*100)};
+}
+
+function env(){
+  clearLog();
+  log('UA: '+navigator.userAgent.slice(0,120));
+  log('standalone 桌面图标模式: '+(window.matchMedia('(display-mode: standalone)').matches||navigator.standalone?'是':'否（Safari 标签页）'));
+  log('AudioContext 采样率: '+(ctx?ctx.sampleRate:'未创建')+'Hz');
+  try{ log('audioSession.type: '+(navigator.audioSession?navigator.audioSession.type:'不支持')) }catch(e){}
+  log('MediaRecorder: '+(window.MediaRecorder?'支持':'不支持')+(window.MediaRecorder?'  mp4='+MediaRecorder.isTypeSupported('audio/mp4'):''));
+  try{ var t=stream.getAudioTracks()[0]; log('麦克风设备: '+JSON.stringify(t.getSettings())) }catch(e){}
+  try{
+    var sc=navigator.mediaDevices.getSupportedConstraints();
+    log('支持 echoCancellation/NS/AGC: '+[!!sc.echoCancellation,!!sc.noiseSuppression,!!sc.autoGainControl].join('/'));
+  }catch(e){}
+  log('---');
+}
+
+/* ① PCM */
+$('#btnA').onclick=async function(){
+  var btn=this; btn.disabled=true;
+  try{
+    ctxReady(); await openMic(); env();
+    log('开始录 PCM…（现在说话）');
+    var chunks=[], sr=ctx.sampleRate, t0=performance.now();
+    tapMic(function(e){
+      var d=new Float32Array(e.inputBuffer.getChannelData(0));
+      chunks.push(d); bufDraw=d.subarray(0,2048);
+      var sq=0; for(var i=0;i<d.length;i++) sq+=d[i]*d[i];
+      meterIn.style.width=Math.min(100,Math.sqrt(sq/d.length)*600)+'%';
+      draw();
+    });
+    await new Promise(function(r){ setTimeout(r,4000) });
+    micOff();
+    var total=chunks.reduce(function(n,a){return n+a.length},0);
+    var all=new Float32Array(total), o=0;
+    chunks.forEach(function(a){ all.set(a,o); o+=a.length });
+    bufA=all; srA=sr;
+    var st=stats(all,sr);
+    log('PCM 结果: 时长 '+st.sec+' 秒 · 音量 '+st.rms+' · 峰值 '+st.peak+' · 像人声 '+st.voice+'%');
+    log(st.voice<18?'⚠️ PCM 这条录到的也不像人声 → 问题在麦克风/音频会话本身，不是解码。':'✅ PCM 这条里有明显的人声周期性。');
+    $('#btnPlayA').disabled=false;
+  }catch(e){ log('出错: '+(e&&e.message||e)) }
+  btn.disabled=false;
+};
+
+/* ② MediaRecorder */
+$('#btnB').onclick=async function(){
+  var btn=this; btn.disabled=true;
+  try{
+    ctxReady(); await openMic(); env();
+    if(!window.MediaRecorder){ log('这台设备没有 MediaRecorder'); btn.disabled=false; return }
+    var list=['audio/mp4','audio/webm;codecs=opus','audio/webm'], m='';
+    for(var i=0;i<list.length;i++){ if(MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(list[i])){ m=list[i]; break } }
+    log('开始录 MediaRecorder（'+(m||'默认')+'）…（现在说话）');
+    var chunks=[];
+    var rec=m?new MediaRecorder(stream,{mimeType:m}):new MediaRecorder(stream);
+    rec.ondataavailable=function(e){ if(e.data&&e.data.size) chunks.push(e.data) };
+    rec.start();
+    tapMic(function(e){
+      var d=e.inputBuffer.getChannelData(0); bufDraw=new Float32Array(d.subarray(0,2048));
+      var sq=0; for(var i=0;i<d.length;i++) sq+=d[i]*d[i];
+      meterIn.style.width=Math.min(100,Math.sqrt(sq/d.length)*600)+'%'; draw();
+    });
+    await new Promise(function(r){ setTimeout(r,4000) });
+    micOff();
+    blobB=await new Promise(function(done){
+      var t=setTimeout(function(){done(null)},4000);
+      rec.onstop=function(){ clearTimeout(t); done(new Blob(chunks,{type:rec.mimeType||m||'audio/mp4'})) };
+      try{ rec.stop() }catch(e){ clearTimeout(t); done(null) }
+    });
+    if(!blobB||!blobB.size){ log('MediaRecorder 没有给出数据'); btn.disabled=false; return }
+    log('MediaRecorder 结果: '+(blobB.type||m)+' · '+blobB.size+' 字节');
+    decB=null;
+    try{
+      var ab=await blobB.arrayBuffer();
+      var oc=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(1,1,44100);
+      var buf=await new Promise(function(ok,no){
+        var p=oc.decodeAudioData(ab,ok,no); if(p&&p.then) p.then(ok,no);
+      });
+      decB=buf.getChannelData(0); decBSr=buf.sampleRate;
+      var st2=stats(decB,decBSr);
+      log('解码后: 时长 '+st2.sec+' 秒 · 音量 '+st2.rms+' · 峰值 '+st2.peak+' · 像人声 '+st2.voice+'%');
+      log(st2.voice<18?'⚠️ 解码出来不像人声 → 沙沙沙就出在这一步（AAC 解码拿到的是噪声）。':'✅ 解码结果是正常人声。');
+    }catch(e){
+      log('decodeAudioData 失败: '+(e&&e.message||e)+'（Safari 有时只给 null）');
+    }
+    $('#btnPlayB').disabled=false; $('#btnPlayRaw').disabled=false;
+  }catch(e){ log('出错: '+(e&&e.message||e)) }
+  btn.disabled=false;
+};
+
+function playBuf(d,sr){
+  var c=ctxReady();
+  var b=c.createBuffer(1,d.length,sr); b.copyToChannel(d,0);
+  var s=c.createBufferSource(); s.buffer=b; s.playbackRate.value=1.3; s.connect(c.destination); s.start();
+}
+$('#btnPlayA').onclick=function(){ if(bufA) playBuf(bufA,srA) };
+$('#btnPlayB').onclick=function(){ if(decB) playBuf(decB,decBSr) };
+$('#btnPlayRaw').onclick=function(){
+  if(!blobB) return;
+  var el=new Audio(); el.setAttribute('playsinline',''); el.src=URL.createObjectURL(blobB);
+  el.playbackRate=1.3; el.play().catch(function(e){ log('<audio> 播放失败: '+(e&&e.message||e)) });
+};
+draw();
+})();
+</script>
+</body>
+</html>

@@ -1306,7 +1306,7 @@ button{font-family:inherit}
   setInterval(function(){ if(Math.random()<.4) spawnBird() },16000);
 
   /* ---------- listen and repeat ---------- */
-  var DEBUG=/[?&]debug/.test(location.search);      // open the page with ?debug to see what the microphone is doing
+  var VER='v3', DEBUG=/[?&]debug/.test(location.search);      // open the page with ?debug to see what the microphone is doing
   function dbg(t){ if(DEBUG) showNote(t,12000) }
   function holdSet(ms){ holdUntil=performance.now()+ms }
   var stream=null, src=null, proc=null, zero=null;
@@ -1398,7 +1398,7 @@ button{font-family:inherit}
     mrBegin();
     micState='ok'; if(window.speechSynthesis) speechSynthesis.cancel(); uiListening(true);
     showNote('小熊在听。对着手机说一句话，停一下，它就会学给你听。',5000);
-    try{ dbg('麦克风 '+JSON.stringify(stream.getAudioTracks()[0].getSettings())+' | 音频 '+c.sampleRate+'Hz | 录音格式 '+(mrMime||'无')) }catch(e){}
+    try{ dbg(VER+' 麦克风 '+JSON.stringify(stream.getAudioTracks()[0].getSettings())+' | 音频 '+c.sampleRate+'Hz | 录音格式 '+(mrMime||'无')) }catch(e){}
   }
   function stopListen(){
     try{ if(navigator.audioSession) navigator.audioSession.type='playback' }catch(e){}
@@ -1454,25 +1454,69 @@ button{font-family:inherit}
         dbg('用编码录音 '+(mrMime||'?')+' '+buf.sampleRate+'Hz，截取 '+(clip.data.length/clip.sr).toFixed(1)+' 秒');
         return clip;
       });
-    }).then(function(clip){ playBack(clip.data,clip.sr) },
-            function(err){ dbg('改用备用录音：'+String(err&&err.message||err)+'（'+sr+'Hz，'+(out.length/sr).toFixed(1)+' 秒）'); playBack(out,sr) });
+    }).then(function(clip){ return clip },
+            function(err){ dbg('改用备用录音：'+String(err&&err.message||err)+'（'+sr+'Hz，'+(out.length/sr).toFixed(1)+' 秒）'); return {data:out,sr:sr} })
+    .then(function(clip){
+      stopListen();                                          // close the microphone first: iPhone plays quietly / hissy while it is open
+      setTimeout(function(){ playBack(clip.data,clip.sr) },250);
+    });
+  }
+  /* wrap raw samples in a 16-bit WAV file so a plain <audio> element can play them */
+  function toWav(x,sr){
+    var n=x.length, ab=new ArrayBuffer(44+n*2), v=new DataView(ab), i;
+    function str(o,t){ for(var k=0;k<t.length;k++) v.setUint8(o+k,t.charCodeAt(k)) }
+    str(0,'RIFF'); v.setUint32(4,36+n*2,true); str(8,'WAVE'); str(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+    v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true); str(36,'data'); v.setUint32(40,n*2,true);
+    for(i=0;i<n;i++){ var q=Math.max(-1,Math.min(1,x[i])); v.setInt16(44+i*2,q<0?q*32768:q*32767,true) }
+    return new Blob([ab],{type:'audio/wav'});
+  }
+  /* one <audio> element that is "unlocked" by the tap on the microphone button, then reused for the playback */
+  var voiceEl=null;
+  function unlockVoice(){
+    try{
+      if(!voiceEl){ voiceEl=new Audio(); voiceEl.setAttribute('playsinline','') }
+      voiceEl.src=SILENT; voiceEl.loop=false; var p=voiceEl.play(); if(p&&p.catch) p.catch(function(){});
+    }catch(e){}
   }
   function playBack(samples,sr){
-    var c=ctx, peak=0.001, i;
-    if(c.state!=='running'){ try{ c.resume() }catch(e){} }
+    var peak=0.001, i;
     for(i=0;i<samples.length;i++){var a=Math.abs(samples[i]); if(a>peak) peak=a}
-    var g=Math.min(8,.85/peak), fade=Math.round(sr*.01);
+    var g=Math.min(6,.9/peak), fade=Math.round(sr*.01);
     for(i=0;i<samples.length;i++){
-      var v=samples[i]*g, e2=Math.min(1,i/fade,(samples.length-1-i)/fade);
-      samples[i]=Math.max(-1,Math.min(1,v*e2));
+      var e2=Math.min(1,i/fade,(samples.length-1-i)/fade);
+      samples[i]=Math.max(-1,Math.min(1,samples[i]*g*e2));
     }
-    var buf=c.createBuffer(1,samples.length,sr); buf.copyToChannel(samples,0);
-    var s=c.createBufferSource(); s.buffer=buf; s.playbackRate.value=1.55;
-    s.connect(master);
-    holdSet(buf.duration/1.55*1000+450);
+    dbg('播放：原音量峰值 '+peak.toFixed(3)+'，放大 '+g.toFixed(1)+' 倍，'+sr+'Hz');
+    var rate=1.5, dur=samples.length/sr/rate*1000;
     bear.classList.add('talk'); bubble.textContent='学给你听！';
-    s.onended=function(){bear.classList.remove('talk'); bear.classList.remove('hearing'); bubble.textContent=idleText(); gain({mood:3}); if(listening&&stream) mrBegin()};
-    s.start();
+    holdSet(dur+800);
+    var finished=false;
+    function done(){
+      if(finished) return; finished=true;
+      bear.classList.remove('talk'); bear.classList.remove('hearing'); bubble.textContent=idleText(); gain({mood:3});
+      try{ if(voiceEl&&voiceEl.src&&voiceEl.src.indexOf('blob:')===0) URL.revokeObjectURL(voiceEl.src) }catch(e){}
+    }
+    if(store.muted){ setTimeout(done,dur); return }
+    try{ if(navigator.audioSession) navigator.audioSession.type='playback' }catch(e){}
+    try{
+      if(!voiceEl) voiceEl=new Audio();
+      var url=URL.createObjectURL(toWav(samples,sr));
+      voiceEl.loop=false; voiceEl.src=url;
+      voiceEl.preservesPitch=false; voiceEl.webkitPreservesPitch=false; voiceEl.mozPreservesPitch=false;
+      voiceEl.playbackRate=rate; voiceEl.defaultPlaybackRate=rate; voiceEl.volume=1;
+      voiceEl.onended=done; voiceEl.onerror=function(){ viaWebAudio() };
+      var pr=voiceEl.play();
+      if(pr&&pr.catch) pr.catch(function(){ viaWebAudio() });
+      setTimeout(done,dur+1500);
+    }catch(e){ viaWebAudio() }
+    function viaWebAudio(){                                  // backup path if the <audio> element refuses to play
+      if(finished) return;
+      try{
+        var c=ctx; if(c.state!=='running') c.resume();
+        var buf=c.createBuffer(1,samples.length,sr); buf.copyToChannel(samples,0);
+        var s=c.createBufferSource(); s.buffer=buf; s.playbackRate.value=rate; s.connect(master); s.onended=done; s.start();
+      }catch(e2){ done() }
+    }
   }
   function babble(){
     if(sleeping) wake();
@@ -1482,7 +1526,7 @@ button{font-family:inherit}
   micBtn.addEventListener('click',async function(){
     if(sleeping) wake();
     if(listening){stopListen(); return}
-    audio();
+    audio(); if(!listening) unlockVoice();
     if(micState==='no'){babble(); return}
     try{ await startListen(); }
     catch(err){

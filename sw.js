@@ -1,5 +1,5 @@
 /* Offline cache for 小熊乐乐. Bump CACHE when you want phones to drop old files. */
-const CACHE = 'xiongle-v6';
+const CACHE = 'xiongle-v7';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 /* install: cache one file at a time, so a single 404 cannot break the whole install */

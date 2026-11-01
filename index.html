@@ -1330,13 +1330,28 @@ button{font-family:inherit}
         就是用户听到的那声长长的沙沙。
      v5 只保留一条管线：用音箱电平表看到的同一批原始采样当录音；
      保留 iOS 自带的麦克风处理；加噪声门；播之前先判断“这像不像人声”；用 Web Audio 播放。 */
-  var VER='v6';
+  var VER='v7';
   var DEBUG=(function(){ try{ if(/[?&]debug/.test(location.search)) return true; return localStorage.getItem('xiongle.debug')==='1' }catch(e){ return false } })();
   function dbg(t){ if(DEBUG) showNote(t,15000) }
   function holdSet(ms){ holdUntil=performance.now()+ms }
   var stream=null, src=null, proc=null, zero=null;
-  var speaking=false, ring=[], rec=[], recLen=0, silentN=0, noise=.004, calibN=0, calibMin=1, tStart=0, hotN=0;
+  var speaking=false, ring=[], rec=[], recLen=0, silentN=0, noise=.01, lvRing=[], tStart=0, hotN=0;
   function resetRec(){speaking=false; ring=[]; rec=[]; recLen=0; silentN=0}
+  /* 底噪用“最近 24 段里最安静的那 20%”来估：iPhone 的自动增益会让底噪慢慢变大，
+     只在开头量一次（老办法）会越用越不准。 */
+  function noiseFloor(){
+    if(!lvRing.length) return .01;
+    var a=lvRing.slice().sort(function(x,y){return x-y});
+    return a[Math.max(0,Math.floor(a.length*.2))]||.01;
+  }
+  /* 一段录音自己的底噪（安静帧的中位数附近），用来判断“这段里到底有没有人说话” */
+  function floorOf(d,sr){
+    var fl=Math.max(64,Math.round(sr*.02)), arr=[], i, j;
+    for(i=0;i+fl<=d.length;i+=fl){ var sm2=0; for(j=0;j<fl;j++) sm2+=d[i+j]*d[i+j]; arr.push(Math.sqrt(sm2/fl)) }
+    if(!arr.length) return .001;
+    arr.sort(function(p,q){return p-q});
+    return arr[Math.floor(arr.length*.25)]||.001;
+  }
 
   /* 在桌面图标里（standalone）没法给网址加 ?debug，所以：连点小熊 5 下就能开关诊断行 */
   (function(){
@@ -1410,7 +1425,7 @@ button{font-family:inherit}
     proc=c.createScriptProcessor(4096,1,1);
     zero=c.createGain(); zero.gain.value=0;
     src.connect(proc); proc.connect(zero); zero.connect(c.destination);
-    resetRec(); calibN=0; calibMin=1; proc.onaudioprocess=onChunk;
+    resetRec(); lvRing=[]; proc.onaudioprocess=onChunk;
     if(made&&oldC&&oldC!==ctx){ try{ oldC.close() }catch(e){} }
     micState='ok'; if(window.speechSynthesis) speechSynthesis.cancel(); uiListening(true);
     showNote('小熊在听。对着手机说一句话，停一下，它就会学给你听。',5000);
@@ -1429,11 +1444,12 @@ button{font-family:inherit}
     var sum=0; for(var i=0;i<len;i++) sum+=input[i]*input[i];
     var rms=Math.sqrt(sum/len);
     setLevel(Math.min(1,rms*6));
-    /* 开头约 0.35 秒先听一下房间有多吵，作为噪声门的基准 */
-    if(calibN<8){ calibMin=Math.min(calibMin,rms); calibN++; if(calibN===8) noise=Math.max(.0015,Math.min(.05,calibMin*1.2)); return }
-    var th=Math.max(.014,noise*2.5), copy=new Float32Array(input);
+    lvRing.push(rms); if(lvRing.length>24) lvRing.shift();
+    noise=noiseFloor();
+    if(lvRing.length<2) return;                     // 第一段先当作底噪
+    var th=Math.max(.012,noise*2.2), copy=new Float32Array(input);
     if(!speaking){
-      if(rms<th) noise=Math.min(.05,noise*.95+rms*.05);
+      if(rms<th) noise=Math.min(.06,noise*.95+rms*.05);
       ring.push(copy); if(ring.length>4) ring.shift();
       if(rms>th) hotN++; else hotN=0;
       if(hotN>=2){
@@ -1458,16 +1474,16 @@ button{font-family:inherit}
     bear.classList.remove('hearing');
     if(out.length<sr*.3){ return }
     var sq=0; for(var q=0;q<out.length;q++) sq+=out[q]*out[q];
-    var level=Math.sqrt(sq/out.length);
-    if(level<Math.max(.006,noise*1.8)){
-      dbg('只录到环境声，已忽略（音量 '+level.toFixed(4)+'，底噪 '+noise.toFixed(4)+'）');
+    var level=Math.sqrt(sq/out.length), nf=floorOf(out,sr);
+    if(level<Math.max(.006,nf*1.4)){
+      dbg('只录到环境声，已忽略（音量 '+level.toFixed(4)+'，底噪 '+nf.toFixed(4)+'）');
       bubble.textContent='没听清，再说一次'; holdSet(0); return;
     }
     /* 关键的一步：先判断这段录音到底是不是人声。沙沙声没有基频、自相关很低，
        人说话的自相关会明显偏高。不是人声就绝不播放，直接提示重说。 */
     var sp=speechness(out,sr);
-    dbg('录音 '+(out.length/sr).toFixed(1)+' 秒 · 底噪 '+noise.toFixed(4)+' · 音量 '+level.toFixed(3)+' · 像人声 '+Math.round(sp*100)+'%');
-    if(sp<.12){
+    dbg('录音 '+(out.length/sr).toFixed(1)+' 秒 · 底噪 '+nf.toFixed(4)+' · 音量 '+level.toFixed(3)+' · 像人声 '+Math.round(sp*100)+'%');
+    if(sp<.20){
       bubble.textContent='只听到沙沙声，再说一次';
       holdSet(0); return;
     }
@@ -1513,36 +1529,119 @@ button{font-family:inherit}
       x2=x1; x1=x[i]; y2=y1; y1=y; x[i]=y;
     }
   }
-  function prepareClip(x,sr,floor){
+  /* ---------- 谱减降噪：把"沙沙"压掉，人声留下 ----------
+     做法：分帧做 FFT，用"最安静的那些帧"估出每个频段的噪声谱，
+     再从每一帧里把它减掉（过减 1.9 倍 + 0.12 的地板，避免音乐噪声），
+     最后用同样的窗重叠加回去。手机上 4 秒约 0.3 秒算完。 */
+  function fft(re,im,inv){
+    var n=re.length, i, j, len, k;
+    for(i=1,j=0;i<n;i++){
+      var bit=n>>1;
+      for(;j&bit;bit>>=1) j^=bit;
+      j^=bit;
+      if(i<j){ var tr=re[i]; re[i]=re[j]; re[j]=tr; var ti=im[i]; im[i]=im[j]; im[j]=ti }
+    }
+    for(len=2;len<=n;len<<=1){
+      var ang=2*Math.PI/len*(inv?1:-1), wr=Math.cos(ang), wi=Math.sin(ang);
+      for(i=0;i<n;i+=len){
+        var cr=1, ci=0, half=len>>1;
+        for(j=0;j<half;j++){
+          var ur=re[i+j], ui=im[i+j];
+          var vr=re[i+j+half]*cr-im[i+j+half]*ci;
+          var vi=re[i+j+half]*ci+im[i+j+half]*cr;
+          re[i+j]=ur+vr; im[i+j]=ui+vi;
+          re[i+j+half]=ur-vr; im[i+j+half]=ui-vi;
+          var ncr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=ncr;
+        }
+      }
+    }
+    if(inv){ for(i=0;i<n;i++){ re[i]/=n; im[i]/=n } }
+  }
+  function denoise(x,sr){
+    var N=1024, hop=N>>1, n=x.length, pad=N, i, k, f;
+    if(n<N*3) return false;
+    /* 两端各补 N 个零再处理，回来只取中间，避免首尾出现爆点 */
+    var m=n+pad*2, xp=new Float32Array(m);
+    for(i=0;i<n;i++) xp[pad+i]=x[i];
+    var win=new Float32Array(N);
+    for(i=0;i<N;i++) win[i]=0.5-0.5*Math.cos(2*Math.PI*i/(N-1));
+    var frames=Math.floor((m-N)/hop)+1;
+    var mags=[], phases=[], re=new Float32Array(N), im=new Float32Array(N);
+    for(f=0;f<frames;f++){
+      var off=f*hop;
+      for(i=0;i<N;i++){ re[i]=xp[off+i]*win[i]; im[i]=0 }
+      fft(re,im,false);
+      var mg=new Float32Array(N>>1), ph=new Float32Array(N>>1);
+      for(k=0;k<(N>>1);k++){ mg[k]=Math.sqrt(re[k]*re[k]+im[k]*im[k]); ph[k]=Math.atan2(im[k],re[k]) }
+      mags.push(mg); phases.push(ph);
+    }
+    var half=N>>1, noise=new Float32Array(half), col=new Float32Array(frames);
+    for(k=0;k<half;k++){
+      for(f=0;f<frames;f++) col[f]=mags[f][k];
+      var srt=Array.prototype.slice.call(col).sort(function(a,b){return a-b});
+      noise[k]=srt[Math.floor(frames*0.2)]||0;
+    }
+    var out=new Float32Array(m), wsum=new Float32Array(m), prev=new Float32Array(half);
+    for(k=0;k<half;k++) prev[k]=1;
+    for(f=0;f<frames;f++){
+      var o2=f*hop, mg2=mags[f], ph2=phases[f], g2=new Float32Array(half), sm=new Float32Array(half);
+      for(k=0;k<half;k++){
+        var g=0.10;
+        if(mg2[k]>0){
+          g=1-(3.2*noise[k])/mg2[k];
+          if(g<0.10) g=0.10; if(g>1) g=1;
+        }
+        g2[k]=g;
+      }
+      for(k=0;k<half;k++){
+        var a1=g2[k>0?k-1:0], b1=g2[k], c1=g2[k<half-1?k+1:half-1];
+        sm[k]=0.25*a1+0.5*b1+0.25*c1;
+      }
+      for(k=0;k<half;k++) prev[k]=0.6*prev[k]+0.4*sm[k];
+      for(i=0;i<N;i++){ re[i]=0; im[i]=0 }
+      for(k=0;k<half;k++){
+        var mgv=mg2[k]*prev[k];
+        re[k]=Math.cos(ph2[k])*mgv; im[k]=Math.sin(ph2[k])*mgv;
+        if(k>0){ re[N-k]=re[k]; im[N-k]=-im[k] }
+      }
+      fft(re,im,true);
+      for(i=0;i<N;i++){ out[o2+i]+=re[i]*win[i]; wsum[o2+i]+=win[i]*win[i] }
+    }
+    for(i=0;i<n;i++){
+      var w=wsum[pad+i], v=(w>1e-3)?out[pad+i]/w:x[i];
+      x[i]=isFinite(v)?v:x[i];
+    }
+    return true;
+  }
+
+  function prepareClip(x,sr){
     var n=x.length, i, j;
-    /* 人声主要在 110Hz~4.5kHz。把两头切掉，沙沙声的高频能量会被压掉一大半，
-       人声反而更清楚（这一步对"沙沙"的听感改善非常明显）。 */
-    biquad(x,sr,'hp',110,0.707);
-    biquad(x,sr,'lp',4500,0.707);
-    /* 底噪用"最安静的 25% 帧"来估，比只看开头 0.35 秒可靠 */
-    var fl=Math.max(64,Math.round(sr*.02)), fr=[];
-    for(i=0;i+fl<=n;i+=fl){ var sm=0; for(j=0;j<fl;j++) sm+=x[i+j]*x[i+j]; fr.push(Math.sqrt(sm/fl)) }
-    if(fr.length>4){ fr.sort(function(p,q){return p-q}); floor=Math.max(floor,fr[Math.floor(fr.length*.25)]||0) }
-    var blk=Math.max(32,Math.round(sr*.005)), g=1, gate=Math.max(.004,floor*2.2);
+    try{ biquad(x,sr,'hp',90,0.707) }catch(e){}       // 去掉贴脸时的隆隆声/直流
+    try{ denoise(x,sr) }catch(e){}                    // 沙沙主要在这一步被干掉
+    /* 残余噪声再压一道：安静的片段整段往下压 */
+    var nf=floorOf(x,sr), gate=Math.max(.003,nf*1.8);
+    var blk=Math.max(32,Math.round(sr*.005)), g=1;
     for(i=0;i<n;i+=blk){
       var pk=0, end=Math.min(n,i+blk);
       for(j=i;j<end;j++) pk=Math.max(pk,Math.abs(x[j]));
-      var target=pk<=gate?Math.max(.12,pk/gate*.6):1;
+      var target=pk<=gate?Math.max(.10,pk/gate*.5):1;
       g+=(target-g)*.5;
       for(j=i;j<end;j++) x[j]*=g;
     }
-    var vals=[]; for(i=0;i<n;i+=7) vals.push(Math.abs(x[i]));
+    /* 归一化：目标 0.55，最多放大 4 倍（降噪后残余的噪声也不会被拉成巨响） */
+    var vals=[];
+    for(i=0;i<n;i+=7) vals.push(Math.abs(x[i]));
     vals.sort(function(p,q){return p-q});
     var peak=Math.max(.002,vals[Math.floor(vals.length*.98)]||.002);
-    var gain=Math.max(.6,Math.min(6,.62/peak));
+    var gain=Math.max(.6,Math.min(4,.55/peak));
     for(i=0;i<n;i++) x[i]=Math.max(-.97,Math.min(.97,x[i]*gain));
     return {gain:gain,peak:peak};
   }
 
   /* 播放走 Web Audio（不经过 <audio>+blob，iPhone 上这条最稳） */
   function playBack(x,sr){
-    var info=prepareClip(x,sr,noise);
-    var rate=1.3, dur=x.length/sr/rate*1000;
+    var info=prepareClip(x,sr);
+    var rate=1.25, dur=x.length/sr/rate*1000;
     dbg('播放：音量 '+info.peak.toFixed(3)+'，放大 '+info.gain.toFixed(1)+' 倍，'+sr+'Hz，'+(x.length/sr).toFixed(1)+' 秒');
     bear.classList.add('talk'); bubble.textContent='学给你听！';
     holdSet(dur+900);

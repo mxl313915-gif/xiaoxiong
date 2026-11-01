@@ -4,19 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="小熊乐乐">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#A8D8F0">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon-180.png">
-<link rel="icon" type="image/png" href="icon-180.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>:root{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}</style>
 <title>小熊乐乐</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@500;700&display=swap">
+<script>
+/* Fonts load after the page is already showing. If Google Fonts is slow or unreachable (common on mainland networks) the page simply keeps the system font. */
+(function(){try{var l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@500;700&display=swap';document.head.appendChild(l)}catch(e){}})();
+</script>
 <style>
 /* ===== Enhanced visual system ===== */
 :root{
@@ -32,7 +31,8 @@
 }
 [hidden]{display:none!important}
 html,body{height:100%}
-body{margin:0;background:var(--sky-bot);color:var(--ink);font-family:var(--body);-webkit-font-smoothing:antialiased}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--sky-bot);color:var(--ink);font-family:var(--body);-webkit-font-smoothing:antialiased;overscroll-behavior:none;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 button{font-family:inherit}
 .app{height:100%;display:flex;flex-direction:column;min-height:0}
 .stage{position:relative;flex:1;min-height:0;overflow:hidden;-webkit-user-select:none;user-select:none}
@@ -75,7 +75,7 @@ button{font-family:inherit}
 .snow .hill{filter:brightness(1.05) saturate(.7)}
 
 /* flowers on ground */
-.flowers{position:absolute;left:0;right:0;bottom:8%;height:18%;pointer-events:none;z-index:1}
+.flowers{position:absolute;left:0;right:0;bottom:8%;height:18%;pointer-events:none;transition:opacity 1.2s}
 .fl{position:absolute;font-size:14px;opacity:.85;animation:sway 4s ease-in-out infinite}
 @keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(5deg)}}
 
@@ -86,6 +86,11 @@ button{font-family:inherit}
 .night .sun{opacity:0;transform:scale(.6)}
 .night .moon{opacity:1}
 .rain .sun,.snow .sun{opacity:.4}
+/* night always wins over weather */
+.stage.night .sun{opacity:0}
+.stage.night .cloud{opacity:0}
+.stage.night .hill{filter:brightness(.5) saturate(.7)}
+.stage.night .flowers{opacity:.3}
 
 /* weather particles */
 .drop,.flake{position:absolute;pointer-events:none;will-change:transform}
@@ -112,7 +117,8 @@ button{font-family:inherit}
 
 .bubble{position:absolute;left:50%;top:15%;transform:translateX(-50%);width:max-content;max-width:min(80%,340px);box-sizing:border-box;padding:10px 18px;background:var(--bubble);color:var(--ink);border-radius:24px;font:400 20px/1.35 var(--display);text-align:center;box-shadow:0 5px 0 rgba(74,44,26,.12),0 2px 12px rgba(0,0,0,.06);z-index:2}
 .bubble::after{content:"";position:absolute;left:50%;bottom:-8px;width:18px;height:18px;background:var(--bubble);transform:translateX(-50%) rotate(45deg);border-radius:0 0 5px 0;box-shadow:3px 3px 0 rgba(74,44,26,.06)}
-.bearwrap{position:absolute;left:50%;bottom:2%;translate:-50% 0;transform:translateX(var(--bx,0px));height:min(68%,520px);aspect-ratio:400/480;max-width:100%}
+.bearwrap{position:absolute;left:50%;bottom:2%;translate:-50% 0;transform:translateX(var(--bx,0px));height:min(68%,520px);aspect-ratio:400/480;max-width:100%;transition:height .45s ease}
+.mini .bearwrap{height:min(34%,250px)}
 .fx{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:3}
 .it{position:absolute;left:0;top:0;width:56px;height:56px;will-change:transform}
 .it svg{width:100%;height:100%;display:block}
@@ -124,10 +130,12 @@ button{font-family:inherit}
 @keyframes ftup{from{opacity:1;translate:0 0}to{opacity:0;translate:0 -46px}}
 .foam{position:absolute;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff 0 20%,rgba(255,255,255,.78) 60%,rgba(190,225,245,.75));border:2px solid rgba(255,255,255,.9);animation:foam 1.3s ease-out forwards}
 @keyframes foam{from{opacity:1;scale:1}to{opacity:0;translate:0 -46px;scale:1.35}}
-.collect{position:absolute;width:36px;height:36px;pointer-events:auto;cursor:pointer;touch-action:manipulation;animation:floaty 2.5s ease-in-out infinite;filter:drop-shadow(0 3px 4px rgba(0,0,0,.15))}
+.collect{position:absolute;width:60px;height:60px;display:grid;place-items:center;pointer-events:auto;cursor:pointer;touch-action:manipulation;animation:floaty 2.5s ease-in-out infinite;filter:drop-shadow(0 3px 4px rgba(0,0,0,.15))}
+.collect svg{width:46px;height:46px}
+.collect span{font-size:38px;line-height:1}
 @keyframes floaty{0%,100%{translate:0 0}50%{translate:0 -10px}}
 .collect.pop{animation:popb .3s ease-out forwards}
-.bird{position:absolute;width:42px;height:32px;pointer-events:auto;cursor:pointer;touch-action:manipulation;z-index:3;transition:filter .2s}
+.bird{position:absolute;width:68px;height:52px;pointer-events:auto;cursor:pointer;touch-action:manipulation;z-index:3;transition:filter .2s}
 .bird:active{filter:brightness(1.2)}
 .result{position:absolute;left:50%;top:42%;translate:-50% -50%;width:min(86%,320px);box-sizing:border-box;background:var(--bubble);border-radius:26px;padding:20px 18px 16px;text-align:center;box-shadow:0 8px 0 rgba(74,44,26,.14),0 4px 24px rgba(0,0,0,.08);z-index:6;animation:rin .35s ease-out}
 @keyframes rin{from{opacity:0;scale:.88}}
@@ -218,7 +226,9 @@ button{font-family:inherit}
 .d-eat{background:linear-gradient(145deg,#F0B030,#D98A10)} .d-play{background:linear-gradient(145deg,#3BB5AC,#208F88)} .d-closet{background:linear-gradient(145deg,#9B74D4,#7A4FB8)} .d-mic{background:linear-gradient(145deg,#F06A7A,#D04058)} .d-sleep{background:linear-gradient(145deg,#5B6BB0,#3A4A90)} .d-weather{background:linear-gradient(145deg,#6AB0E0,#3A8AC0)} .d-dance{background:linear-gradient(145deg,#E88AC0,#C060A0)}
 .main.on .disc::before{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 calc(6px + var(--lv,0) * 28px) rgba(228,86,107,.28);transition:box-shadow .07s;pointer-events:none}
 .lab{font:400 14px var(--display);letter-spacing:.02em;white-space:nowrap}
-.note{margin:8px auto 0;max-width:34em;min-height:2.4em;font-size:12px;line-height:1.5;color:var(--muted);text-align:center;text-wrap:balance}
+/* hints float above the tray so they never take up play space */
+.note{position:absolute;left:50%;bottom:calc(100% + 12px);transform:translate(-50%,6px);width:max-content;max-width:min(88vw,340px);box-sizing:border-box;margin:0;padding:8px 14px;border-radius:16px;background:rgba(61,36,20,.88);color:#FFF8EC;font-size:13px;line-height:1.5;text-align:center;text-wrap:balance;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;z-index:7}
+.note.show{opacity:1;transform:translate(-50%,0)}
 .phead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .phead h2{margin:0;font:400 22px var(--display)}
 .phead .grow{flex:1}
@@ -240,8 +250,38 @@ button{font-family:inherit}
 .key{border:0;border-radius:12px 12px 16px 16px;background:var(--c);color:#fff;font:400 26px var(--display);display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;cursor:pointer;box-shadow:0 5px 0 rgba(0,0,0,.18);touch-action:manipulation;-webkit-tap-highlight-color:transparent;min-width:0}
 .key.lit,.key:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.18);filter:brightness(1.15)}
 .phint{margin:8px 0 2px;text-align:center;font:400 16px var(--display);min-height:1.3em}
+/* little-kid games */
+.hands{opacity:0;transition:opacity .12s}
+.hide .hands{opacity:1}
+.hide .eyes{opacity:0;animation:none}
+.cbox{position:absolute;left:0;top:0;width:80px;height:100px;transition:transform .45s ease;will-change:transform}
+.cjar{position:absolute;left:18px;bottom:4px;width:44px;height:44px;opacity:0;transition:opacity .2s}
+.cjar svg{width:100%;height:100%;display:block}
+.cbox.show .cjar{opacity:1}
+.cup{position:absolute;left:0;bottom:0;width:80px;height:90px;pointer-events:auto;cursor:pointer;touch-action:manipulation;transition:transform .35s ease;-webkit-tap-highlight-color:transparent}
+.cup svg{width:100%;height:100%;display:block}
+.cbox.up .cup{transform:translateY(-64px)}
+.capples{position:absolute;left:0;right:0;top:29%;display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:0 20px}
+.capple{width:54px;height:54px;padding:0;border:0;background:none;pointer-events:auto;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.capple svg{width:100%;height:100%;display:block}
+.capple.hit{animation:hitjump .45s ease-out}
+.capple.bounce{animation:hitjump .55s ease-out;animation-delay:var(--d)}
+@keyframes hitjump{40%{transform:translateY(-22px) scale(1.12)}}
+.cchoices{position:absolute;left:0;right:0;bottom:40%;display:flex;justify-content:center;gap:16px}
+.cnum{width:78px;height:78px;border-radius:50%;border:0;background:var(--c);color:#fff;font:400 44px/1 var(--display);pointer-events:auto;cursor:pointer;box-shadow:0 6px 0 rgba(0,0,0,.2);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.cnum:active{transform:translateY(4px);box-shadow:0 2px 0 rgba(0,0,0,.2)}
+.cnum[disabled]{opacity:.4;box-shadow:none}
+.cnum.nope{animation:nope .35s}
+.dcv{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto;touch-action:none;cursor:crosshair}
+.palette{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;flex-wrap:wrap;gap:8px;padding:0 12px}
+.pc{width:44px;height:44px;border-radius:50%;border:4px solid #fff;background:var(--c);box-shadow:0 3px 0 rgba(0,0,0,.2);pointer-events:auto;cursor:pointer;padding:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:transform .1s}
+.pc.sel{transform:scale(1.18);border-color:var(--ink)}
+.pc.tool{background:#fff;color:var(--ink);display:grid;place-items:center;border-color:#fff}
+.pc.tool.sel{border-color:var(--ink)}
+.pc.tool svg{width:22px;height:22px}
 @media (max-height:600px){.bearwrap{height:60%}.bubble{top:13%;font-size:17px}}
-@media (prefers-reduced-motion:reduce){.cloud,#bodyG,.eyes,.fl{animation:none!important}}
+@media (max-width:380px){.disc{width:46px;height:46px}.main .disc{width:66px;height:66px}.lab{font-size:13px}.row{gap:4px}}
+@media (prefers-reduced-motion:reduce){.cloud,#bodyG,.eyes,.fl,.drop,.flake{animation:none!important}}
 </style>
 </head>
 <body>
@@ -319,6 +359,12 @@ button{font-family:inherit}
                 <path class="line" d="M136 152 Q152 167 168 152"/>
                 <path class="line" d="M232 152 Q248 167 264 152"/>
               </g>
+              <g class="hands" aria-hidden="true">
+                <circle cx="152" cy="152" r="36" fill="#B97A44" stroke="#8F5A2E" stroke-width="4"/>
+                <circle cx="248" cy="152" r="36" fill="#B97A44" stroke="#8F5A2E" stroke-width="4"/>
+                <ellipse class="padc" cx="152" cy="160" rx="15" ry="12"/>
+                <ellipse class="padc" cx="248" cy="160" rx="15" ry="12"/>
+              </g>
               <ellipse class="ink" cx="200" cy="183" rx="21" ry="15"/>
               <ellipse fill="#fff" opacity=".35" cx="193" cy="178" rx="7" ry="3.5"/>
               <path class="line smile" d="M200 197 V216 M174 214 Q187 228 200 216 Q213 228 226 214"/>
@@ -383,15 +429,15 @@ button{font-family:inherit}
         <span class="lab">衣柜</span>
       </button>
       <button class="btn" id="weatherBtn" type="button">
-        <span class="disc d-weather"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="14" r="6" fill="currentColor" fill-opacity=".25"/><path d="M8 22h16M11 25h10"/><path d="M16 4v2M6 14h2M24 14h2M8.5 7.5l1.5 1.5M22 7.5l-1.5 1.5"/></svg></span>
-        <span class="lab" id="weatherLab">天气</span>
+        <span class="disc d-weather" id="weatherIcon"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="14" r="6" fill="currentColor" fill-opacity=".25"/><path d="M8 22h16M11 25h10"/><path d="M16 4v2M6 14h2M24 14h2M8.5 7.5l1.5 1.5M22 7.5l-1.5 1.5"/></svg></span>
+        <span class="lab" id="weatherLab">晴天</span>
       </button>
       <button class="btn" id="sleepBtn" type="button">
         <span class="disc d-sleep"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M24 20A11 11 0 0 1 12 6a11 11 0 1 0 12 14Z" fill="currentColor" fill-opacity=".25"/></svg></span>
         <span class="lab" id="sleepLab">睡觉</span>
       </button>
     </div>
-    <p class="note" id="note">点“跟我说”，小熊会用小宝宝的声音学你说话。要在 https 网址里打开，并允许麦克风。</p>
+    <p class="note" id="note" role="status" aria-live="polite"></p>
   </div>
 
   <div class="panel" id="foodPanel" hidden>
@@ -429,14 +475,14 @@ button{font-family:inherit}
   var bear=$('#bear'), bubble=$('#bubble'), note=$('#note'), stage=$('#stage'), fx=$('#fx'), bearwrap=$('#bearwrap');
   var head=$('#head'), belly=$('#belly'), bearAll=$('#bearAll'), armL=$('#armL'), armR=$('#armR'), jarG=$('#jar');
   var micBtn=$('#micBtn'), micLab=$('#micLab'), sleepLab=$('#sleepLab'), weatherLab=$('#weatherLab');
-  var sleeping=false, eating=false, listening=false, micState='unknown', snoreT=null, sayT=null, holdUntil=0;
+  var sleeping=false, eating=false, listening=false, micState='unknown', snoreT=null, sleepT=null, noteT=null, sayT=null, holdUntil=0;
   var ui='home', G=null, raf=0;
   var weather='sun'; // sun | rain | snow
 
   /* ---------- saved progress ---------- */
   var store={stars:20,owned:{},worn:{},muted:false};
   try{
-    var raw=localStorage.getItem('xiongle.v3');
+    var raw=localStorage.getItem('xiongle.v3')||localStorage.getItem('xiongle.v2');
     if(raw){var o=JSON.parse(raw); if(o&&typeof o.stars==='number'){store.stars=o.stars; store.owned=o.owned||{}; store.worn=o.worn||{}; store.muted=!!o.muted}}
   }catch(e){}
   // All items free — force own everything
@@ -457,6 +503,10 @@ button{font-family:inherit}
   function say(t,ms){
     bubble.textContent=t; clearTimeout(sayT); speak(t);
     sayT=setTimeout(function(){bubble.textContent=idleText()},ms||2200);
+  }
+  function showNote(t,ms){
+    note.textContent=t; note.classList.add('show'); clearTimeout(noteT);
+    noteT=setTimeout(function(){note.classList.remove('show')},ms||6000);
   }
   function hold(ms){holdUntil=Math.max(holdUntil,performance.now()+ms)}
   function setLevel(l){var v=l.toFixed(2); bear.style.setProperty('--lv',v); micBtn.style.setProperty('--lv',v)}
@@ -486,11 +536,11 @@ button{font-family:inherit}
     }
     try{
       if(!keepAlive){keepAlive=new Audio(SILENT); keepAlive.loop=true}
-      if(keepAlive.paused){var kp=keepAlive.play(); if(kp&&kp.catch) kp.catch(function(){})}
+      if(keepAlive.paused&&!listening){var kp=keepAlive.play(); if(kp&&kp.catch) kp.catch(function(){})}
     }catch(e){}
     clearTimeout(chkT);
     chkT=setTimeout(function(){
-      if(ctx&&ctx.state!=='running') note.textContent='好像没有声音：请关掉手机的静音键、调大音量，再点一下小熊。';
+      if(ctx&&ctx.state!=='running') showNote('好像没有声音：请关掉手机的静音键、调大音量，再点一下小熊。',8000);
     },900);
   }
   ['pointerdown','touchend','click','keydown'].forEach(function(ev){document.addEventListener(ev,unlock,{passive:true})});
@@ -553,7 +603,14 @@ button{font-family:inherit}
     $('#starN').textContent=store.stars;
   }
   function gain(o){for(var k in o) st[k]=clamp(st[k]+o[k],0,100); renderHud()}
-  function addStars(n){store.stars+=n; save(); renderHud(); play($('#starPill'),'pop',500)}
+  function addStars(n){
+    var before=store.stars; store.stars+=n; save(); renderHud(); play($('#starPill'),'pop',500);
+    if(Math.floor(before/10)<Math.floor(store.stars/10)){
+      setTimeout(function(){
+        if(ui!=='game'&&!sleeping){ say('哇！攒了 '+store.stars+' 颗星星啦！',3000); play(bear,'love',2100); react(S.win) }
+      },1400);
+    }
+  }
 
   /* ---------- screens ---------- */
   var UIEL={tray:$('#tray'),foodPanel:$('#foodPanel'),playPanel:$('#playPanel'),closetPanel:$('#closetPanel'),pianoPanel:$('#pianoPanel'),hud:$('#hud'),ghud:$('#ghud')};
@@ -580,13 +637,20 @@ button{font-family:inherit}
   })();
 
   /* ---------- weather ---------- */
+  var WI='<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  var CLOUD='<path d="M9 19a5 5 0 0 1 .8-9.9A7 7 0 0 1 23.4 11.5 4 4 0 0 1 23 19z" fill="currentColor" fill-opacity=".25"/>';
+  var WICON={
+    sun:WI+'<circle cx="16" cy="14" r="6" fill="currentColor" fill-opacity=".25"/><path d="M8 22h16M11 25h10"/><path d="M16 4v2M6 14h2M24 14h2M8.5 7.5l1.5 1.5M22 7.5l-1.5 1.5"/></svg>',
+    rain:WI+CLOUD+'<path d="M11 23l-1.6 4M16 23l-1.6 4M21 23l-1.6 4"/></svg>',
+    snow:WI+CLOUD+'<path d="M11 24v.01M16 27v.01M21 24v.01M13.5 27v.01M18.5 24v.01" stroke-width="3.6"/></svg>'
+  };
   function setWeather(w){
     weather=w;
     stage.classList.remove('rain','snow');
     if(w==='rain') stage.classList.add('rain');
     if(w==='snow') stage.classList.add('snow');
     var labels={sun:'晴天',rain:'下雨',snow:'下雪'};
-    weatherLab.textContent=labels[w]||'天气';
+    weatherLab.textContent=labels[w]||'天气'; $('#weatherIcon').innerHTML=WICON[w]||WICON.sun;
     buildWeatherFx();
     if(w==='rain') say('下雨啦，好凉快！',2000);
     else if(w==='snow') say('下雪了！好漂亮！',2000);
@@ -625,7 +689,7 @@ button{font-family:inherit}
   /* ---------- sleeping ---------- */
   function wake(){
     if(!sleeping) return false;
-    sleeping=false; clearInterval(snoreT);
+    sleeping=false; clearInterval(snoreT); clearTimeout(sleepT);
     bear.classList.remove('sleep'); bear.classList.remove('yawn'); stage.classList.remove('night');
     sleepLab.textContent='睡觉';
     react(S.hello); say(st.energy>=100?'睡饱啦！':'早上好！');
@@ -635,7 +699,8 @@ button{font-family:inherit}
     if(listening) stopListen();
     setUI('home'); sleeping=true; stage.classList.add('night'); sleepLab.textContent='叫醒';
     play(bear,'yawn',1500); react(S.yawn); say('哈……困啦',2000);
-    setTimeout(function(){
+    clearTimeout(sleepT); clearInterval(snoreT);
+    sleepT=setTimeout(function(){
       if(!sleeping) return;
       bear.classList.add('sleep'); bubble.textContent='呼……呼……';
       react(S.snore); snoreT=setInterval(function(){if(sleeping) react(S.snore)},3800);
@@ -698,7 +763,7 @@ button{font-family:inherit}
   function eatFood(f){
     if(eating) return;
     setUI('home');
-    if(st.food>=95){say('吃饱啦，肚子圆滚滚！',2200); play(belly,'jig',700); react(S.giggle); return}
+    if(st.food>=95&&f.gain.mood<20){say('吃饱啦，肚子圆滚滚！',2200); play(belly,'jig',700); react(S.giggle); return}
     eating=true; jarG.innerHTML=f.svg;
     bear.classList.add('eat'); react(S.munch); say('啊呜！',1400);
     setTimeout(function(){
@@ -756,7 +821,11 @@ button{font-family:inherit}
     {id:'bubble',name:'戳泡泡',tag:'点一点',icon:'<circle cx="26" cy="38" r="20" fill="#9FD8F2" fill-opacity=".7" stroke="#fff" stroke-width="3"/><circle cx="44" cy="16" r="10" fill="#F6B7D2" fill-opacity=".75" stroke="#fff" stroke-width="3"/><path d="M16 32 q3 -9 11 -10" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/>'},
     {id:'piano',name:'小钢琴',tag:'弹一弹',icon:'<rect x="6" y="14" width="52" height="40" rx="7" fill="#fff" stroke="#9AB3C8" stroke-width="3"/><path d="M19 14v40M32 14v40M45 14v40" stroke="#9AB3C8" stroke-width="3"/><rect x="15" y="14" width="9" height="24" rx="2" fill="#3B2418"/><rect x="40" y="14" width="9" height="24" rx="2" fill="#3B2418"/>'},
     {id:'bath',name:'洗澡',tag:'搓一搓',icon:'<path d="M32 6 Q46 26 46 38 A14 14 0 0 1 18 38 Q18 26 32 6Z" fill="#7CC4EE" stroke="#4A9AC8" stroke-width="3" stroke-linejoin="round"/><circle cx="50" cy="16" r="7" fill="#fff" stroke="#BFDCEC" stroke-width="2"/><circle cx="12" cy="20" r="5" fill="#fff" stroke="#BFDCEC" stroke-width="2"/>'},
-    {id:'dance',name:'跳舞',tag:'扭一扭',icon:'<circle cx="32" cy="14" r="10" fill="#E8B070"/><path d="M22 28 Q32 24 42 28 L40 50 Q32 46 24 50Z" fill="#E4566B"/><path d="M18 32 L10 42M46 32 L54 42" stroke="#E8B070" stroke-width="4" stroke-linecap="round"/>'}
+    {id:'dance',name:'跳舞',tag:'扭一扭',icon:'<circle cx="32" cy="14" r="10" fill="#E8B070"/><path d="M22 28 Q32 24 42 28 L40 50 Q32 46 24 50Z" fill="#E4566B"/><path d="M18 32 L10 42M46 32 L54 42" stroke="#E8B070" stroke-width="4" stroke-linecap="round"/>'},
+    {id:'cups',name:'找蜂蜜',tag:'找一找',icon:'<path d="M6 22H26L29 52H3Z" fill="#E4566B"/><path d="M38 22H58L61 52H35Z" fill="#8A63C8"/><rect x="21" y="32" width="22" height="22" rx="6" fill="#D9951C"/><rect x="23" y="26" width="18" height="8" rx="3" fill="#7A4B22"/>'},
+    {id:'draw',name:'画画',tag:'涂一涂',icon:'<path d="M12 50 L16 36 L42 10 L52 20 L26 46Z" fill="#F2C230" stroke="#C99A17" stroke-width="3" stroke-linejoin="round"/><path d="M12 50 L16 36 L26 46Z" fill="#F7E6C8" stroke="#C99A17" stroke-width="3" stroke-linejoin="round"/><path d="M40 12 L50 22" stroke="#E4566B" stroke-width="6"/><path d="M6 58 Q18 50 30 58 T56 58" fill="none" stroke="#3E86D8" stroke-width="4" stroke-linecap="round"/>'},
+    {id:'count',name:'数苹果',tag:'数一数',icon:'<circle cx="14" cy="40" r="11" fill="#E4443C"/><circle cx="32" cy="26" r="11" fill="#E4443C"/><circle cx="50" cy="40" r="11" fill="#E4443C"/><path d="M32 15q1 -6 6 -7M14 29q1 -6 6 -7M50 29q1 -6 6 -7" stroke="#5B3A1E" stroke-width="3" fill="none" stroke-linecap="round"/>'},
+    {id:'peek',name:'躲猫猫',tag:'找小熊',icon:'<circle cx="14" cy="14" r="9" fill="#B97A44"/><circle cx="50" cy="14" r="9" fill="#B97A44"/><circle cx="32" cy="34" r="24" fill="#B97A44"/><circle cx="22" cy="32" r="10" fill="#9A6234" stroke="#7A4B22" stroke-width="2"/><circle cx="42" cy="32" r="10" fill="#9A6234" stroke="#7A4B22" stroke-width="2"/><ellipse cx="32" cy="47" rx="9" ry="6" fill="#F7E6C8"/><ellipse cx="32" cy="43" rx="4" ry="3" fill="#3B2418"/>'}
   ];
   var playGrid=$('#playGrid');
   GAMES.forEach(function(g){
@@ -773,7 +842,7 @@ button{font-family:inherit}
 
   /* ---------- shared game bits ---------- */
   function canPlay(){
-    if(st.energy<15){ setUI('home'); say('好困呀……先睡一觉吧',2600); play(bear,'yawn',1500); react(S.yawn); return false }
+    if(st.energy<10){ setUI('home'); say('好困呀……先睡一觉，或者吃根香蕉吧',3400); play(bear,'yawn',1500); react(S.yawn); return false }
     return true;
   }
   function floatText(x,y,txt){
@@ -794,28 +863,32 @@ button{font-family:inherit}
   function place(el,x,y,half){el.style.transform='translate('+(x-half).toFixed(1)+'px,'+(y-half).toFixed(1)+'px)'}
 
   function startGame(type){
-    if(!canPlay()) return;
-    stopLoop(); fx.innerHTML='';
-    var timed=type!=='bath';
-    G={type:type,t:0,dur:25,timed:timed,score:0,count:0,items:[],spawn:0,last:0,bx:0,tx:0,done:false,hint:''};
     $('#result').hidden=true;
+    if(!canPlay()) return;
+    stopLoop(); fx.innerHTML=''; stage.classList.remove('mini'); bear.classList.remove('hide');
+    var timed=(type==='apple'||type==='bubble');
+    G={type:type,t:0,dur:25,timed:timed,score:0,count:0,items:[],spawn:0,last:0,bx:0,tx:0,done:false,hint:'',timers:[],earned:0};
     setUI('game');
     $('#gTime').hidden=!timed; $('#gTime').textContent='25';
     if(type==='apple'){
       G.hint='拖一拖，用嘴巴接苹果！'; $('#gScore').textContent='0 分'; stage.style.touchAction='none';
     }else if(type==='bubble'){
       G.hint='点一点，戳破泡泡！'; $('#gScore').textContent='0 分';
-    }else{
+    }else if(type==='bath'){
       G.hint='帮我搓一搓，把泥巴搓掉！'; $('#gScore').textContent='干净 0%'; buildDirt(); bearwrap.style.touchAction='none';
-    }
+    }else if(type==='cups'){ setupCups() }
+    else if(type==='draw'){ setupDraw() }
+    else if(type==='count'){ setupCount() }
+    else if(type==='peek'){ setupPeek() }
     bubble.textContent=G.hint; clearTimeout(sayT); speak(G.hint);
     if(timed){ raf=requestAnimationFrame(tick) }
   }
   function stopLoop(){cancelAnimationFrame(raf); raf=0}
   function cleanupGame(){
-    stopLoop(); fx.innerHTML=''; stage.style.touchAction=''; bearwrap.style.touchAction='';
+    stopLoop(); if(G&&G.timers) G.timers.forEach(clearTimeout);
+    fx.innerHTML=''; stage.style.touchAction=''; bearwrap.style.touchAction='';
     bearwrap.style.setProperty('--bx','0px'); bear.style.setProperty('--lean','0deg');
-    bear.classList.remove('wide'); $('#dirt').innerHTML='';
+    bear.classList.remove('wide'); bear.classList.remove('hide'); stage.classList.remove('mini'); $('#dirt').innerHTML='';
   }
   function exitGame(){ cleanupGame(); G=null; $('#result').hidden=true; setUI('home') }
   $('#gExit').addEventListener('click',exitGame);
@@ -906,13 +979,175 @@ button{font-family:inherit}
     if(!G||G.done) return; G.done=true; stopLoop();
     var stars=Math.max(1,Math.round(G.score/2));
     cleanupGame();
-    gain({mood:20,energy:-15,food:-8}); addStars(stars);
+    gain({mood:20,energy:-8,food:-5}); addStars(stars);
     play(bear,'love',2100); react(S.win);
     showResult('时间到！','得了 '+G.score+' 分',stars);
   }
   function showResult(title,sub,stars){
     $('#rTitle').textContent=title; $('#rSub').textContent=sub; $('#rStars').textContent=stars; $('#result').hidden=false;
   }
+
+  /* ---------- gentle games for little ones ---------- */
+  function later(fn,ms){var id=setTimeout(function(){if(G&&!G.done) fn()},ms); G.timers.push(id); return id}
+  function earn(n){addStars(n); G.earned=(G.earned||0)+n}
+  function finishGame(title,sub){
+    if(!G||G.done) return; G.done=true; var n=G.earned||0; cleanupGame();
+    gain({mood:15,energy:-5}); play(bear,'love',2100); react(S.win); showResult(title,sub,n);
+  }
+  var ZH=['','一','二','三','四','五','六'];
+  var JAR='<svg viewBox="0 0 44 44"><rect x="8" y="12" width="28" height="30" rx="8" fill="#D9951C"/><rect x="10" y="5" width="24" height="9" rx="3" fill="#7A4B22"/><rect x="13" y="21" width="18" height="12" rx="4" fill="#F7E6C8"/></svg>';
+  var APPLE='<svg viewBox="0 0 44 44"><circle cx="22" cy="26" r="16" fill="#E4443C"/><path d="M22 11 q1 -7 8 -8" stroke="#5B3A1E" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="30" cy="6" rx="7" ry="4" transform="rotate(-25 30 6)" fill="#6DB44F"/><path d="M12 22 q2 -6 8 -7" stroke="#fff" opacity=".5" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg>';
+
+  /* find the honey: three cups, shuffle, pick one */
+  function setupCups(){
+    stage.classList.add('mini');
+    G.hint='看好蜂蜜藏在哪里哦！'; G.round=0; G.wins=0; G.slotOf=[0,1,2]; G.jarAt=0; G.phase='idle'; G.boxes=[];
+    $('#gScore').textContent='第 1 轮';
+    var colors=['#E4566B','#2E9E96','#8A63C8'];
+    for(var i=0;i<3;i++){
+      (function(i){
+        var box=document.createElement('div'); box.className='cbox';
+        box.innerHTML='<div class="cjar">'+JAR+'</div><div class="cup" role="button" tabindex="0" aria-label="杯子"><svg viewBox="0 0 80 90" aria-hidden="true"><path d="M14 6H66L76 80H4Z" fill="'+colors[i]+'"/><path d="M22 24H58" stroke="rgba(255,255,255,.55)" stroke-width="7" stroke-linecap="round"/><rect x="2" y="74" width="76" height="12" rx="6" fill="rgba(0,0,0,.2)"/></svg></div>';
+        box.querySelector('.cup').addEventListener('click',function(){pickCup(i)});
+        fx.appendChild(box); G.boxes.push(box);
+      })(i);
+    }
+    layoutCups(); later(cupsRound,2400);
+  }
+  function layoutCups(){
+    var W=fx.clientWidth,H=fx.clientHeight, xs=[W*.2,W*.5,W*.8];
+    G.boxes.forEach(function(b,i){b.style.transform='translate('+(xs[G.slotOf[i]]-40).toFixed(0)+'px,'+(H*.5-50).toFixed(0)+'px)'});
+  }
+  function cupsRound(){
+    G.round++; $('#gScore').textContent='第 '+G.round+' 轮'; G.phase='show';
+    G.boxes.forEach(function(b){b.classList.remove('show');b.classList.remove('up')});
+    G.jarAt=Math.floor(Math.random()*3);
+    say('看好哦，蜂蜜在这里！',2600);
+    later(function(){var b=G.boxes[G.jarAt]; b.classList.add('show'); b.classList.add('up')},500);
+    later(function(){G.boxes[G.jarAt].classList.remove('up')},1900);
+    later(function(){G.boxes[G.jarAt].classList.remove('show')},2400);
+    var swaps=3+Math.min(G.round,3), t0=2700;
+    for(var k=0;k<swaps;k++){
+      later(function(){
+        var a=Math.floor(Math.random()*3), c=(a+1+Math.floor(Math.random()*2))%3, tmp=G.slotOf[a];
+        G.slotOf[a]=G.slotOf[c]; G.slotOf[c]=tmp; layoutCups(); react(S.tick);
+      },t0+k*650);
+    }
+    later(function(){G.phase='pick'; say('蜂蜜在哪个杯子里？',4000)},t0+swaps*650+200);
+  }
+  function pickCup(i){
+    if(!G||G.type!=='cups'||G.phase!=='pick') return;
+    G.phase='reveal'; var box=G.boxes[i]; box.classList.add('up');
+    if(i===G.jarAt){
+      box.classList.add('show'); G.wins++; earn(2); say('找到啦！好棒！',2200);
+      play(bear,'love',2100); play(bearAll,'jump',700); react(S.win);
+    }else{
+      react(S.nope); say('这里没有哦',1500);
+      later(function(){var r=G.boxes[G.jarAt]; r.classList.add('show'); r.classList.add('up'); earn(1); say('蜂蜜在这里！',2200)},1100);
+    }
+    later(function(){
+      if(G.round>=5) finishGame('玩完啦！','5 轮里找到了 '+G.wins+' 次');
+      else cupsRound();
+    },3200);
+  }
+
+  /* count the apples: tap each one to count, then pick the number */
+  function setupCount(){
+    stage.classList.add('mini'); G.q=0; G.ok=0; G.prev=0; G.hint='数一数，有几个苹果？';
+    $('#gScore').textContent='0 / 5';
+    G.layer=document.createElement('div'); G.layer.className='clayer'; fx.appendChild(G.layer);
+    later(countRound,2400);
+  }
+  function countRound(){
+    G.layer.innerHTML=''; G.q++; G.locked=false; G.counted=0;
+    var n; do{n=1+Math.floor(Math.random()*5)}while(n===G.prev);
+    G.prev=n; G.target=n;
+    var row=document.createElement('div'); row.className='capples'; G.layer.appendChild(row);
+    for(var i=0;i<n;i++){
+      var a=document.createElement('button'); a.type='button'; a.className='capple'; a.innerHTML=APPLE; a.setAttribute('aria-label','苹果');
+      a.addEventListener('click',(function(a){return function(){
+        if(a.getAttribute('data-c')) return; a.setAttribute('data-c','1'); G.counted++;
+        a.classList.add('hit'); react(S.blip); speak(ZH[G.counted]);
+      }})(a));
+      row.appendChild(a);
+    }
+    var opts=[n]; while(opts.length<3){var m=1+Math.floor(Math.random()*5); if(opts.indexOf(m)<0) opts.push(m)}
+    opts.sort(function(){return Math.random()-.5});
+    var ch=document.createElement('div'); ch.className='cchoices'; G.layer.appendChild(ch);
+    var cols=['#E4566B','#2E9E96','#8A63C8'];
+    opts.forEach(function(m,i){
+      var b=document.createElement('button'); b.type='button'; b.className='cnum'; b.style.setProperty('--c',cols[i]);
+      b.textContent=m; b.setAttribute('aria-label',String(m));
+      b.addEventListener('click',function(){chooseNum(m,b)});
+      ch.appendChild(b);
+    });
+    say('有几个苹果呀？',3500);
+  }
+  function chooseNum(m,b){
+    if(!G||G.locked||b.disabled) return;
+    if(m===G.target){
+      G.locked=true; G.ok++; $('#gScore').textContent=G.ok+' / 5'; earn(2);
+      Array.prototype.forEach.call(G.layer.querySelectorAll('.capple'),function(a,i){
+        a.style.setProperty('--d',(i*.08)+'s'); a.classList.remove('hit'); void a.offsetWidth; a.classList.add('bounce');
+      });
+      say(ZH[m]+'个！对啦！',2200); play(bear,'love',2100); react(S.giggle);
+      later(function(){ if(G.q>=5) finishGame('真聪明！','数对了 5 次'); else countRound() },2400);
+    }else{
+      b.disabled=true; play(b,'nope',350); react(S.nope); say('再数一数哦',1800);
+    }
+  }
+
+  /* drawing: finger painting on top of the bear */
+  var PCOLORS=['#E4443C','#F28C28','#F2C230','#5DAE4F','#3E86D8','#8A63C8','#F59BB0'];
+  var ERASER_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M4 16l9-10 7 6-6 7H8z" fill="currentColor" fill-opacity=".2"/><path d="M8 19h12"/></svg>';
+  var TRASH_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>';
+  function setupDraw(){
+    G.hint='用手指画画吧！'; G.strokes=0; $('#gScore').textContent='画画';
+    var cv=document.createElement('canvas'); cv.className='dcv'; fx.appendChild(cv);
+    var dpr=Math.min(2,window.devicePixelRatio||1), W=fx.clientWidth, H=fx.clientHeight;
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    var c=cv.getContext('2d'); c.scale(dpr,dpr); c.lineCap='round'; c.lineJoin='round';
+    var color=PCOLORS[0], erase=false, down=false, lx=0, ly=0;
+    function pos(e){var r=cv.getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}}
+    function style(){c.globalCompositeOperation=erase?'destination-out':'source-over'; c.strokeStyle=color; c.fillStyle=color; c.lineWidth=erase?34:12}
+    cv.addEventListener('pointerdown',function(e){
+      e.preventDefault(); try{cv.setPointerCapture(e.pointerId)}catch(x){}
+      down=true; var p=pos(e); lx=p.x; ly=p.y; style(); c.beginPath(); c.arc(p.x,p.y,c.lineWidth/2,0,6.2832); c.fill();
+    });
+    cv.addEventListener('pointermove',function(e){
+      if(!down) return; var p=pos(e); style(); c.beginPath(); c.moveTo(lx,ly); c.lineTo(p.x,p.y); c.stroke(); lx=p.x; ly=p.y;
+    });
+    function up(){
+      if(!down) return; down=false; G.strokes++;
+      if(G.strokes%4===0){ say(pick(['画得真好看！','哇，好漂亮！','我喜欢这个颜色！']),2000); react(S.blip); gain({mood:2}) }
+      if(G.strokes%6===0) earn(1);
+    }
+    cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+    var pal=document.createElement('div'); pal.className='palette'; fx.appendChild(pal);
+    function sel(b){Array.prototype.forEach.call(pal.children,function(x){x.classList.remove('sel')}); b.classList.add('sel')}
+    function tool(label,svg,fn){var b=document.createElement('button'); b.type='button'; b.className='pc tool'; b.innerHTML=svg; b.setAttribute('aria-label',label); b.addEventListener('click',fn); pal.appendChild(b); return b}
+    PCOLORS.forEach(function(col,i){
+      var b=document.createElement('button'); b.type='button'; b.className='pc'+(i===0?' sel':''); b.style.setProperty('--c',col); b.setAttribute('aria-label','颜色');
+      b.addEventListener('click',function(){color=col; erase=false; sel(b); react(S.tick)});
+      pal.appendChild(b);
+    });
+    var er=tool('橡皮',ERASER_SVG,function(){erase=true; sel(er)});
+    tool('清空',TRASH_SVG,function(){c.clearRect(0,0,W,H); say('擦干净啦，再画一张！',1800)});
+  }
+
+  /* peekaboo: the bear hides behind its paws, tap to find it */
+  function setupPeek(){
+    G.hint='躲猫猫！找找小熊'; G.covered=false; G.n=0; $('#gScore').textContent='0 次';
+    later(coverBear,2200);
+  }
+  function coverBear(){ G.covered=true; bear.classList.add('hide'); react(S.hum); say('我躲起来啦，点点找我！',3500) }
+  stage.addEventListener('click',function(){
+    if(!G||G.type!=='peek'||G.done||!G.covered) return;
+    G.covered=false; bear.classList.remove('hide'); G.n++; earn(1); gain({mood:2});
+    $('#gScore').textContent=G.n+' 次'; say(pick(['躲猫猫！找到啦！','哈哈，被你找到了！']),1800);
+    play(bearAll,'jump',700); react(S.boing);
+    later(coverBear,1800+Math.random()*1400);
+  });
 
   /* ---------- bath ---------- */
   var SPOTS=[[150,108,14],[262,120,12],[222,88,10],[140,300,16],[258,332,18],[200,388,14],[108,350,12],[300,296,12]];
@@ -958,7 +1193,7 @@ button{font-family:inherit}
   }
 
   /* ---------- piano ---------- */
-  var NOTES=[261.63,293.66,329.63,349.23,392,440,493.88];
+  var NOTES=[523.25,587.33,659.25,698.46,783.99,880,987.77];
   var KEYC=['#E4566B','#EE8A3A','#E2B22A','#5DAE4F','#2E9E96','#4B7FD0','#8A63C8'];
   var keysEl=$('#keys'), keyBtns=[];
   NOTES.forEach(function(f,i){
@@ -1024,7 +1259,7 @@ button{font-family:inherit}
     var el=document.createElement('div'); el.className='collect';
     el.innerHTML=isStar
       ?'<svg viewBox="0 0 32 32"><path d="M16 3l3.8 8.4 9.2 1-6.9 6.1 2 9-8.1-4.7-8.1 4.7 2-9L3 12.4l9.2-1z" fill="#F2B72B" stroke="#C98A12" stroke-width="2"/></svg>'
-      :'<span style="font-size:28px">'+pick(['🌸','🌼','⭐','💖'])+'</span>';
+      :'<span>'+pick(['🌸','🌼','💖'])+'</span>';
     var x=40+Math.random()*(W-80), y=60+Math.random()*(H*0.4);
     el.style.left=x+'px'; el.style.top=y+'px';
     el.addEventListener('pointerdown',function(ev){
@@ -1070,10 +1305,73 @@ button{font-family:inherit}
   setInterval(function(){ if(Math.random()<.35) spawnCollect() },9000);
   setInterval(function(){ if(Math.random()<.4) spawnBird() },16000);
 
-  /* ---------- listen and repeat (iOS-friendly) ---------- */
-  var stream=null, src=null, proc=null, zero=null, mediaRec=null, recChunks=[], useMR=false;
-  var speaking=false, ring=[], rec=[], recLen=0, silentN=0, noise=.003, silenceTimer=null;
-  function resetRec(){speaking=false; ring=[]; rec=[]; recLen=0; silentN=0; recChunks=[]; if(silenceTimer){clearTimeout(silenceTimer);silenceTimer=null}}
+  /* ---------- listen and repeat ---------- */
+  var DEBUG=/[?&]debug/.test(location.search);      // open the page with ?debug to see what the microphone is doing
+  function dbg(t){ if(DEBUG) showNote(t,12000) }
+  function holdSet(ms){ holdUntil=performance.now()+ms }
+  var stream=null, src=null, proc=null, zero=null;
+  var speaking=false, ring=[], rec=[], recLen=0, silentN=0, noise=.004, calibN=0, calibMin=1, tStart=0;
+  function resetRec(){speaking=false; ring=[]; rec=[]; recLen=0; silentN=0}
+
+  /* Second, independent recording of the same microphone with the browser's own encoder (MediaRecorder).
+     On iPhone this is much cleaner than reading raw samples; the raw samples stay as a backup. */
+  var mr=null, mrChunks=null, mrMime='', mrT0=0;
+  function mrDrop(){
+    if(mr){ try{ mr.ondataavailable=null; mr.onstop=null; if(mr.state!=='inactive') mr.stop() }catch(e){} }
+    mr=null; mrChunks=null;
+  }
+  function mrBegin(){
+    mrDrop();
+    if(!window.MediaRecorder||!stream) return;
+    try{
+      var list=['audio/mp4','audio/webm;codecs=opus','audio/webm'], m='';
+      for(var i=0;i<list.length;i++){ if(MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(list[i])){m=list[i];break} }
+      var chunks=[]; mrChunks=chunks; mrMime=m;
+      mr=m?new MediaRecorder(stream,{mimeType:m}):new MediaRecorder(stream);
+      mr.ondataavailable=function(e){ if(e.data&&e.data.size) chunks.push(e.data) };
+      mr.start(); mrT0=performance.now();
+    }catch(e){ mr=null; mrChunks=null }
+  }
+  function mrTake(){
+    return new Promise(function(done){
+      var rc=mr, chunks=mrChunks, t0=mrT0, type=mrMime;
+      mr=null; mrChunks=null;
+      if(!rc||rc.state==='inactive'||!chunks){ done(null); return }
+      var timer=setTimeout(function(){done(null)},2500);
+      rc.onstop=function(){ clearTimeout(timer); done(chunks.length?{blob:new Blob(chunks,{type:rc.mimeType||type||'audio/mp4'}),t0:t0}:null) };
+      try{ rc.stop() }catch(e){ clearTimeout(timer); done(null) }
+    });
+  }
+  function decodeBlob(blob){
+    return new Promise(function(ok,no){
+      var rd=new FileReader(); rd.onerror=function(){no(rd.error||new Error('read'))};
+      rd.onload=function(){
+        try{
+          var OC=window.OfflineAudioContext||window.webkitOfflineAudioContext, oc=new OC(1,1,44100);
+          var pr=oc.decodeAudioData(rd.result,function(b){ok(b)},function(e){no(e||new Error('decode'))});
+          if(pr&&pr.then) pr.then(ok,no);
+        }catch(e){no(e)}
+      };
+      rd.readAsArrayBuffer(blob);
+    });
+  }
+  /* cut the spoken part out of a recording: find the loud frames and drop the quiet ends */
+  function pickVoice(buf,tFrom,tTo){
+    var sr=buf.sampleRate, d=buf.getChannelData(0), n=d.length;
+    if(buf.numberOfChannels>1){ var d2=buf.getChannelData(1), mix=new Float32Array(n); for(var i=0;i<n;i++) mix[i]=(d[i]+d2[i])/2; d=mix }
+    var a=Math.max(0,Math.floor((tFrom/1000-.7)*sr)), b=Math.min(n,Math.ceil((tTo/1000+.7)*sr));
+    if(b-a<sr*.2){ a=0; b=n }
+    var fl=Math.round(sr*.02), nf=Math.floor((b-a)/fl), fr=new Float32Array(nf), mx=0;
+    for(var f=0;f<nf;f++){ var sm=0; for(var j=0;j<fl;j++){ var v=d[a+f*fl+j]; sm+=v*v } fr[f]=Math.sqrt(sm/fl); if(fr[f]>mx) mx=fr[f] }
+    if(mx<.006) return null;
+    var lim=mx*.18, f0=0, f1=nf-1;
+    while(f0<nf&&fr[f0]<lim) f0++;
+    while(f1>f0&&fr[f1]<lim) f1--;
+    var s0=Math.max(0,a+(f0-4)*fl), s1=Math.min(n,a+(f1+8)*fl);
+    if(s1-s0<sr*.2) return null;
+    return {data:d.slice(s0,s1),sr:sr};
+  }
+
   function uiListening(on){
     listening=on;
     micBtn.classList.toggle('on',on); micBtn.setAttribute('aria-pressed',String(on));
@@ -1083,73 +1381,31 @@ button{font-family:inherit}
     bubble.textContent=idleText();
     if(on) say('我在听，你说吧',3000);
   }
-  function preferMediaRecorder(){
-    try{
-      var ua=navigator.userAgent||'';
-      if(/iPhone|iPad|iPod/i.test(ua)) return true;
-      if(typeof MediaRecorder==='undefined') return false;
-      return !window.AudioWorkletNode && !window.ScriptProcessorNode;
-    }catch(e){return true}
-  }
   async function startListen(){
     if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)) throw new Error('no-media');
     var c=audio(); if(!c) throw new Error('no-audio');
+    try{ if(navigator.audioSession) navigator.audioSession.type='auto' }catch(e){}
+    try{ if(keepAlive) keepAlive.pause() }catch(e){}      // the silent keep-alive clip is not needed while the mic is open
+    /* raw microphone: no echo-cancel / noise-suppress / auto-gain, which on iPhone can turn speech into hiss */
+    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    /* iPhone can leave the audio engine paused while the permission box is open */
     if(c.state!=='running'){ try{ await c.resume() }catch(e){} }
-    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
-    useMR = preferMediaRecorder() && typeof MediaRecorder!=='undefined';
-    resetRec();
-    if(useMR){
-      var mime='';
-      if(MediaRecorder.isTypeSupported('audio/mp4')) mime='audio/mp4';
-      else if(MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime='audio/webm;codecs=opus';
-      else if(MediaRecorder.isTypeSupported('audio/webm')) mime='audio/webm';
-      try{
-        mediaRec = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream);
-      }catch(e){ mediaRec = new MediaRecorder(stream); }
-      recChunks=[];
-      mediaRec.ondataavailable=function(ev){ if(ev.data&&ev.data.size>0) recChunks.push(ev.data) };
-      mediaRec.onstop=function(){ finishMR() };
-      mediaRec.start(100);
-      // simple level meter + auto stop by timer + silence heuristic via Analyser
-      try{
-        src=c.createMediaStreamSource(stream);
-        var an=c.createAnalyser(); an.fftSize=512;
-        src.connect(an);
-        var data=new Uint8Array(an.frequencyBinCount);
-        var quiet=0;
-        function tick(){
-          if(!listening||!mediaRec||mediaRec.state!=='recording') return;
-          an.getByteTimeDomainData(data);
-          var sum=0; for(var i=0;i<data.length;i++){ var v=(data[i]-128)/128; sum+=v*v }
-          var rms=Math.sqrt(sum/data.length);
-          setLevel(Math.min(1,rms*6));
-          if(rms>0.04){ speaking=true; quiet=0; bear.classList.add('hearing') }
-          else if(speaking){ quiet++; if(quiet>12){ try{mediaRec.stop()}catch(e){} return } }
-          requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-        // hard max 6s
-        silenceTimer=setTimeout(function(){ if(mediaRec&&mediaRec.state==='recording') try{mediaRec.stop()}catch(e){} },6000);
-      }catch(e){
-        silenceTimer=setTimeout(function(){ if(mediaRec&&mediaRec.state==='recording') try{mediaRec.stop()}catch(e){} },4000);
-      }
-    }else{
-      src=c.createMediaStreamSource(stream);
-      proc=c.createScriptProcessor(2048,1,1);
-      zero=c.createGain(); zero.gain.value=0;
-      src.connect(proc); proc.connect(zero); zero.connect(c.destination);
-      proc.onaudioprocess=onChunk;
-    }
+    src=c.createMediaStreamSource(stream);
+    proc=c.createScriptProcessor(2048,1,1);
+    zero=c.createGain(); zero.gain.value=0;
+    src.connect(proc); proc.connect(zero); zero.connect(c.destination);
+    resetRec(); calibN=0; calibMin=1; proc.onaudioprocess=onChunk;
+    mrBegin();
     micState='ok'; if(window.speechSynthesis) speechSynthesis.cancel(); uiListening(true);
-    if(note) note.textContent='小熊在听。对着手机说一句话，停一下，它就会学给你听。';
+    showNote('小熊在听。对着手机说一句话，停一下，它就会学给你听。',5000);
+    try{ dbg('麦克风 '+JSON.stringify(stream.getAudioTracks()[0].getSettings())+' | 音频 '+c.sampleRate+'Hz | 录音格式 '+(mrMime||'无')) }catch(e){}
   }
   function stopListen(){
-    if(silenceTimer){clearTimeout(silenceTimer);silenceTimer=null}
-    try{ if(mediaRec&&mediaRec.state==='recording') mediaRec.stop() }catch(e){}
-    mediaRec=null;
+    try{ if(navigator.audioSession) navigator.audioSession.type='playback' }catch(e){}
     if(proc){proc.onaudioprocess=null; try{proc.disconnect()}catch(e){}}
     if(src){try{src.disconnect()}catch(e){}}
     if(zero){try{zero.disconnect()}catch(e){}}
+    mrDrop();
     if(stream){stream.getTracks().forEach(function(t){t.stop()})}
     proc=src=zero=stream=null; resetRec(); uiListening(false);
   }
@@ -1159,18 +1415,21 @@ button{font-family:inherit}
     var sum=0; for(var i=0;i<len;i++) sum+=input[i]*input[i];
     var rms=Math.sqrt(sum/len);
     setLevel(Math.min(1,rms*8));
-    var th=Math.max(.018,noise*3.5), copy=new Float32Array(input);
+    /* first half second: learn how loud the room is (the quietest moment counts) */
+    if(calibN<12){ calibMin=Math.min(calibMin,rms); calibN++; if(calibN===12) noise=Math.max(.002,Math.min(.04,calibMin*1.3)); return }
+    var th=Math.max(.02,noise*3.5), copy=new Float32Array(input);
     if(!speaking){
-      noise=noise*.97+rms*.03;
+      if(rms<th) noise=Math.min(.04,noise*.95+rms*.05);
       ring.push(copy); if(ring.length>4) ring.shift();
+      if(mr&&performance.now()-mrT0>25000) mrBegin();       // do not let a long silence pile up in memory
       if(rms>th){
-        speaking=true; rec=ring.slice(); ring=[]; silentN=0; recLen=rec.length*len;
+        speaking=true; tStart=performance.now()-ring.length*len/sr*1000; rec=ring.slice(); ring=[]; silentN=0; recLen=rec.length*len;
         bear.classList.add('hearing'); say('嗯嗯？',1500);
       }
     }else{
       rec.push(copy); recLen+=len;
       if(rms<th*.7) silentN+=len; else silentN=0;
-      if(silentN>sr*.65||recLen>sr*8){speaking=false; finish()}
+      if(silentN>sr*.65||recLen>sr*6){speaking=false; finish()}
     }
   }
   function finish(){
@@ -1180,46 +1439,39 @@ button{font-family:inherit}
     for(var k=0;k<rec.length&&o<total;k++){
       var n=Math.min(rec[k].length,total-o); out.set(rec[k].subarray(0,n),o); o+=n;
     }
+    var t0=tStart, t1=performance.now()-Math.max(0,silentN/sr*1000-180);
     rec=[]; ring=[]; silentN=0; recLen=0;
     if(total<sr*.3){bear.classList.remove('hearing'); return}
-    playBack(out);
+    var sq=0; for(var q=0;q<out.length;q++) sq+=out[q]*out[q];
+    var level=Math.sqrt(sq/out.length);
+    if(level<Math.max(.008,noise*2)){ bear.classList.remove('hearing'); dbg('只录到环境声，已忽略（音量 '+level.toFixed(4)+'）'); mrBegin(); return }
+    holdSet(9000);                                           // ignore the microphone while the clip is being prepared
+    mrTake().then(function(r){
+      if(!r) throw new Error('没有编码录音');
+      return decodeBlob(r.blob).then(function(buf){
+        var clip=pickVoice(buf,t0-r.t0,t1-r.t0);
+        if(!clip) throw new Error('编码录音里没有人声');
+        dbg('用编码录音 '+(mrMime||'?')+' '+buf.sampleRate+'Hz，截取 '+(clip.data.length/clip.sr).toFixed(1)+' 秒');
+        return clip;
+      });
+    }).then(function(clip){ playBack(clip.data,clip.sr) },
+            function(err){ dbg('改用备用录音：'+String(err&&err.message||err)+'（'+sr+'Hz，'+(out.length/sr).toFixed(1)+' 秒）'); playBack(out,sr) });
   }
-  async function finishMR(){
-    try{
-      if(!recChunks.length){ bear.classList.remove('hearing'); stopListen(); return }
-      var blob=new Blob(recChunks,{type:recChunks[0].type||'audio/mp4'});
-      recChunks=[];
-      var arr=await blob.arrayBuffer();
-      var c=audio();
-      if(c.state!=='running'){ try{ await c.resume() }catch(e){} }
-      var buf=await c.decodeAudioData(arr.slice(0));
-      // mix to mono if needed
-      var ch=buf.getChannelData(0);
-      var samples=new Float32Array(ch.length);
-      samples.set(ch);
-      if(samples.length<c.sampleRate*0.25){ bear.classList.remove('hearing'); stopListen(); return }
-      playBack(samples);
-    }catch(err){
-      console&&console.warn(err);
-      bear.classList.remove('hearing');
-      babble();
-    }
-    // stop tracks after playback starts
-    setTimeout(function(){ try{ if(stream) stream.getTracks().forEach(function(t){t.stop()}) }catch(e){} },800);
-  }
-  function playBack(samples){
-    var c=ctx||audio(), peak=0.001, i;
-    if(!c) return;
+  function playBack(samples,sr){
+    var c=ctx, peak=0.001, i;
+    if(c.state!=='running'){ try{ c.resume() }catch(e){} }
     for(i=0;i<samples.length;i++){var a=Math.abs(samples[i]); if(a>peak) peak=a}
-    var g=Math.min(3.5,.75/peak);
-    for(i=0;i<samples.length;i++) samples[i]*=g;
-    var buf=c.createBuffer(1,samples.length,c.sampleRate); 
-    try{ buf.copyToChannel(samples,0) }catch(e){ buf.getChannelData(0).set(samples) }
-    var s=c.createBufferSource(); s.buffer=buf; s.playbackRate.value=1.35;
-    s.connect(master||c.destination);
-    hold(buf.duration/1.35*1000+450);
+    var g=Math.min(8,.85/peak), fade=Math.round(sr*.01);
+    for(i=0;i<samples.length;i++){
+      var v=samples[i]*g, e2=Math.min(1,i/fade,(samples.length-1-i)/fade);
+      samples[i]=Math.max(-1,Math.min(1,v*e2));
+    }
+    var buf=c.createBuffer(1,samples.length,sr); buf.copyToChannel(samples,0);
+    var s=c.createBufferSource(); s.buffer=buf; s.playbackRate.value=1.55;
+    s.connect(master);
+    holdSet(buf.duration/1.55*1000+450);
     bear.classList.add('talk'); bubble.textContent='学给你听！';
-    s.onended=function(){bear.classList.remove('talk'); bear.classList.remove('hearing'); bubble.textContent=idleText(); gain({mood:3}); stopListen()};
+    s.onended=function(){bear.classList.remove('talk'); bear.classList.remove('hearing'); bubble.textContent=idleText(); gain({mood:3}); if(listening&&stream) mrBegin()};
     s.start();
   }
   function babble(){
@@ -1235,12 +1487,12 @@ button{font-family:inherit}
     try{ await startListen(); }
     catch(err){
       micState='no';
-      note.textContent='麦克风没打开：请在浏览器里允许麦克风。如果是在预览里看，放到 https 网址后才能录音，现在小熊先用咿呀声回答你。';
+      showNote('麦克风没打开：请在浏览器里允许麦克风。要放在 https 网址里才能录音，现在小熊先用咿呀声回答你。',9000);
       babble();
     }
   });
   document.addEventListener('visibilitychange',function(){
-    if(document.hidden){ if(listening) stopListen(); if(ui==='game') exitGame() }
+    if(document.hidden){ if(listening) stopListen(); if(ui==='game') exitGame(); try{ if(keepAlive) keepAlive.pause() }catch(e){} }
   });
 
   /* ---------- slow changes ---------- */
@@ -1270,9 +1522,13 @@ button{font-family:inherit}
   });
   renderMute();
   renderHud();
-  if('serviceWorker' in navigator){addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
+  showNote('点“跟我说”，小熊会用小宝宝的声音学你说话',6000);
 })();
 </script>
 
+<script>
+/* lets the phone keep a copy so the game opens with no network */
+if('serviceWorker' in navigator && location.protocol!=='file:'){ window.addEventListener('load',function(){ navigator.serviceWorker.register('sw.js').catch(function(){}) }) }
+</script>
 </body>
 </html>

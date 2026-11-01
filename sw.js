@@ -1,14 +1,15 @@
-var CACHE='xiongle-v1';
-var ASSETS=['./','./index.html','./manifest.webmanifest','./icon-180.png','./icon-512.png'];
-self.addEventListener('install',function(e){
-  e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(ASSETS)}).then(function(){return self.skipWaiting()}));
-});
-self.addEventListener('activate',function(e){
-  e.waitUntil(caches.keys().then(function(ks){return Promise.all(ks.filter(function(k){return k!==CACHE}).map(function(k){return caches.delete(k)}))}).then(function(){return self.clients.claim()}));
-});
-self.addEventListener('fetch',function(e){
-  e.respondWith(caches.match(e.request,{ignoreSearch:true}).then(function(r){return r||fetch(e.request).then(function(res){
-    if(e.request.method==='GET'&&res.ok){var cp=res.clone();caches.open(CACHE).then(function(c){c.put(e.request,cp)})}
-    return res;
-  })}));
+/* Offline cache for 小熊乐乐. Bump CACHE when you want phones to drop old files. */
+const CACHE='xiongle-v2';
+const FILES=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
+self.addEventListener('fetch',e=>{
+  const r=e.request; if(r.method!=='GET') return;
+  if(new URL(r.url).origin!==location.origin) return;           // fonts etc. go straight to the network
+  e.respondWith((async()=>{
+    const hit=await caches.match(r,{ignoreSearch:true});
+    const net=fetch(r).then(res=>{ if(res&&res.ok){ const cp=res.clone(); caches.open(CACHE).then(c=>c.put(r,cp)) } return res }).catch(()=>null);
+    if(hit){ e.waitUntil(net); return hit }                      // open instantly from the phone, refresh quietly
+    return (await net)||(await caches.match('./index.html'))||Response.error();
+  })());
 });
